@@ -1,0 +1,9 @@
+{
+  "name": "mux-monorepo",
+  "private": true,
+  "workspaces": ["api", "web", "packages/*"],
+  "scripts": {
+    "typecheck": "npm -w api run typecheck && npm -w web run typecheck",
+    "build": "npm -w api run build && npm -w web run build"
+  }
+}

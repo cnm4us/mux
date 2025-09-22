@@ -1,44 +1,24 @@
 {
-
   "name": "mux-web",
-
   "private": true,
-
   "type": "module",
-
   "scripts": {
-
     "dev": "vite",
-
     "build": "vite build",
-
-    "preview": "vite preview"
-
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-
   "dependencies": {
-
     "@mux/mux-player": "^3.6.0",
-
     "@mux/mux-player-react": "^3.6.0",
-
     "react": "^19.1.1",
-
     "react-dom": "^19.1.1"
-
   },
-
   "devDependencies": {
-
+    "@types/node": "^24.5.2",
     "@types/react": "^19.1.13",
-
     "@types/react-dom": "^19.1.9",
-
     "typescript": "^5.9.2",
-
     "vite": "^7.1.6"
-
   }
-
 }
-

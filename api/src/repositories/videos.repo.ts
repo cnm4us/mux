@@ -10,8 +10,3 @@ getById(id: string): Promise<Video | null>;
 getByUploadId(uploadId: string): Promise<Video | null>;
 listFeed(limit: number): Promise<Video[]>; // already filtered to status=ready, newest first
 }
-
-
-export interface UploadsRepo {
-setDirectUpload(params: { videoId: string; uploadId: string }): Promise<void>;
-}
