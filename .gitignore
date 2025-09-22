@@ -1,0 +1,72 @@
+# Node deps
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+.out/
+.next/
+.nuxt/
+.svelte-kit/
+.storybook-out/
+coverage/
+.nyc_output/
+
+# Caches
+.cache/
+.parcel-cache/
+.eslintcache
+tsbuildinfo
+**/*.tsbuildinfo
+
+# Logs & debug
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Env & secrets (commit an .env.example instead)
+.env
+**/.env*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+
+# App artifacts
+*.local
+tmp/
+temp/
+**/tmp/
+**/temp/
+
+# Frontend frameworks (pick what applies)
+.vite/
+vite.config.timestamp-*.mjs
+.angular/
+.rpt2_cache/
+.sass-cache/
+
+# Test runners
+cypress/videos/
+cypress/screenshots/
+playwright-report/
+test-results/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.iml
+
+# Package managers
+.pnpm-store/
