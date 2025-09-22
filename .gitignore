@@ -70,3 +70,6 @@ Thumbs.db
 
 # Package managers
 .pnpm-store/
+
+# uploads (local only)
+api/uploads/
