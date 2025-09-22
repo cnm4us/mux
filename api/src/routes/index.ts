@@ -1,10 +1,6 @@
 import { Router } from "express";
-import { muxWebhook } from "./webhooks.js";
+import v1 from "./v1/index.js";
 
 const router = Router();
-
-// Webhook (mounted at /api/webhooks/mux externally)
-router.post("/webhooks/mux", muxWebhook);
-
-// …other routes, e.g. router.get("/feed", ...)
+router.use("/v1", v1);
 export default router;
