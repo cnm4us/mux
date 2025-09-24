@@ -1,37 +1,45 @@
+// src/controllers/uploads.controller.ts
 import type { Request, Response } from "express";
-import { mux } from "../services/mux/index.js";
-import { getRepos } from "../wiring/repos.js";
-import { config } from "../config/index.js";
+import { VideosMySqlRepo } from "../repositories/videos.mysql.js";
+import { mux } from "../services/mux/client.js";  // see note below
+
+const videosRepo = new VideosMySqlRepo(); // <- simple singleton
 
 export async function createUpload(req: Request, res: Response) {
   try {
-    const title = (req.body?.title ?? null) as string | null;
+    const title: string | null = req.body?.title ?? null;
 
-    const { videosRepo } = getRepos();
-    const v = await videosRepo.createProvisional({ title });
+    const video = await videosRepo.createProvisional({ title });
 
-    const upload = await mux.video.uploads.create({
+    const resp = await mux.video.uploads.create({
+      cors_origin: "*",
       new_asset_settings: { playback_policy: ["signed"] },
-      cors_origin: process.env.APP_ORIGIN ?? "https://mux.bawebtech.com",
-      timeout: 60 * 60
     });
 
-    await videosRepo.linkUpload({ uploadId: upload.id, videoId: v.id });
+    const muxUploadId =
+      (resp as any)?.id ??
+      (resp as any)?.data?.id ??
+      (resp as any)?.upload?.id ??
+      null;
+
+    if (!muxUploadId) {
+      console.error("Mux create upload returned no id. Raw response:", resp);
+      return res.status(502).json({
+        error: { code: "MUX_CREATE_UPLOAD_FAILED", message: "Failed to create direct upload" },
+      });
+    }
+
+    await videosRepo.linkUpload({ videoId: video.id, uploadId: muxUploadId });
 
     return res.status(201).json({
-      video: { id: v.id, title: v.title, status: v.status, createdAt: v.createdAt },
-      directUpload: {
-        id: upload.id,
-        url: upload.url,
-        expiresAt: upload.timeout
-          ? new Date(Date.now() + upload.timeout * 1000).toISOString()
-          : null
-      }
+      videoId: video.id,
+      uploadId: muxUploadId,
+      url: (resp as any)?.url ?? (resp as any)?.data?.url ?? null,
     });
-  } catch (err: any) {
-    console.error("Create upload failed:", err?.response?.data ?? err);
+  } catch (err) {
+    console.error("Create upload failed:", err);
     return res.status(500).json({
-      error: { code: "MUX_CREATE_UPLOAD_FAILED", message: "Failed to create direct upload" }
+      error: { code: "MUX_CREATE_UPLOAD_FAILED", message: "Failed to create direct upload" },
     });
   }
 }

@@ -35,7 +35,15 @@ export const config = {
 
   // Webhooks
   MUX_WEBHOOK_SECRET: must("MUX_WEBHOOK_SECRET", process.env.MUX_WEBHOOK_SECRET),
+  MUX_WEBHOOK_DEV_BYPASS: process.env.MUX_WEBHOOK_DEV_BYPASS ?? 'false',
+
 
   // Persistence switch
   PERSISTENCE: (process.env.PERSISTENCE ?? "memory") as "memory" | "mysql",
+
+  DB_HOST: process.env.DB_HOST ?? "127.0.0.1",
+  DB_PORT: Number(process.env.DB_PORT ?? 3306),
+  DB_USER: process.env.DB_USER ?? "",
+  DB_PASSWORD: process.env.DB_PASSWORD ?? "",
+  DB_NAME: process.env.DB_NAME ?? "mux",
 };

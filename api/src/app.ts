@@ -10,6 +10,10 @@ export function buildApp() {
 
   app.use(cors({ origin: config.CORS_ORIGINS }));
 
+  app.get("/api/debug/env", (_req, res) =>
+    res.json({ MUX_WEBHOOK_DEV_BYPASS: config.MUX_WEBHOOK_DEV_BYPASS })
+  );
+
   // Health
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 

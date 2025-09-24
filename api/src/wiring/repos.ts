@@ -1,6 +1,14 @@
+import { config } from "../config/index.js";
 import { VideosMemoryRepo } from "../repositories/impl/memory/videos.memory.js";
+import { VideosMySqlRepo } from "../repositories/videos.mysql.js";
 
-const videosRepo = new VideosMemoryRepo();
+let _videosRepo: any;
+
 export function getRepos() {
-  return { videosRepo };
+  if (!_videosRepo) {
+    _videosRepo = config.PERSISTENCE === "mysql"
+      ? new VideosMySqlRepo()
+      : new VideosMemoryRepo();
+  }
+  return { videosRepo: _videosRepo };
 }
