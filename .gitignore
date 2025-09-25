@@ -73,3 +73,5 @@ Thumbs.db
 
 # uploads (local only)
 api/uploads/
+
+/build/project-tree/

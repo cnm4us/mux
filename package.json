@@ -8,6 +8,20 @@
   ],
   "scripts": {
     "typecheck": "npm -w api run typecheck && npm -w web run typecheck",
-    "build": "npm -w api run build && npm -w web run build"
+    "build": "npm -w api run build && npm -w web run build",
+    "tree": "tsx tools/project-tree.ts --root=. --out=build/project-tree",
+    "tree:md": "tsx tools/project-tree.ts --root=. --md",
+    "tree:web": "tsx tools/project-tree.ts --root=. --out=build/project-tree --include=src/**,app/** --exclude=**/*.test.*,**/*.map",
+    "tree:since": "tsx tools/project-tree.ts --root=. --out=build/project-tree --since=origin/main",
+    "tree:work": "tsx tools/project-tree.ts --root=. --out=build/project-tree --graph --todos=8"
+  },
+  "devDependencies": {
+    "ignore": "^7.0.5",
+    "minimatch": "^10.0.3",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "react-router-dom": "^7.9.2"
   }
 }

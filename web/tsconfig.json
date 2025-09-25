@@ -16,9 +16,17 @@
         "noEmit": true,
         "types": [
             "vite/client"
-        ]
+        ],
+        // ✅ add these two lines
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "src/*"
+            ]
+        }
     },
     "include": [
-        "src"
-, "public/sw.js"    ]
+        "src",
+        "public/sw.js"
+    ]
 }
