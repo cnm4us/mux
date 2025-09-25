@@ -16,44 +16,84 @@ export type MuxEvent = {
   };
 };
 
+function pickIds(evt: any) {
+  const d = evt.data ?? {};
+  const obj = evt.object ?? {};
+  const uploadId =
+    d.upload_id            // present on video.asset.*
+    || (obj.type === "upload" ? obj.id : null)   // present on video.upload.*
+    || d.id                // present on video.upload.* payloads
+    || null;
+
+  const assetId =
+    d.asset_id             // present on video.upload.asset_created
+    || (obj.type === "asset" ? obj.id : null)    // present on video.asset.*
+    || d.id                // sometimes in asset.* payloads
+    || null;
+
+  return { uploadId, assetId };
+}
+
+
 export class MuxWebhookService {
   constructor(private videosRepo: VideosMySqlRepo) {}
+
+  
 
   /**
    * Returns: a concise description of what was changed (good for notes/logs)
    */
-  async handleEvent(evt: MuxEvent): Promise<string> {
-    const t = evt.type;
-    const d = evt.data ?? {};
+  async handleEvent(evt: MuxEvent & { object?: { type?: string; id?: string } }): Promise<string> {
+  const d = evt.data ?? {};
+  const { uploadId, assetId } = pickIds(evt);
 
-    switch (t) {
-      case "video.upload.asset_created": {
-        await this.videosRepo.markProcessing({ uploadId: d.upload_id!, assetId: d.id });
-        return `processing (upload=${d.upload_id}, asset=${d.id})`;
-        }
-
-      case "video.asset.ready": {
-        await this.videosRepo.markReady({
-          uploadId: d.upload_id!,
-          assetId: d.id!,
-          playbackId: d.playback_ids?.[0]?.id ?? null,
-          duration: typeof d.duration === "number" ? d.duration : null,
-        });
-        return `video ready (upload=${d.upload_id}, asset=${d.id}, playback=${d.playback_ids?.[0]?.id ?? "none"})`;
-      }
-
-      case "video.asset.errored": {
-        await this.videosRepo.markErrored({ uploadId: d.upload_id! });
-        return `video errored (upload=${d.upload_id})`;
-      }
-      
-
-      // You can add more Mux events here later as needed.
-
-      default:
-        return `ignored event type: ${t}`;
+  switch (evt.type) {
+    case "video.upload.created": {
+      // no DB mutation required
+      return `upload created (upload=${uploadId ?? "none"})`;
     }
+
+    case "video.upload.asset_created": {
+      // Only when we actually have the upload id
+      if (uploadId) {
+        await this.videosRepo.markProcessing({ uploadId, assetId });
+        return `processing (upload=${uploadId}, asset=${assetId ?? "none"})`;
+      }
+      return `noop: asset_created (no upload_id, asset=${assetId ?? "none"})`;
+    }
+
+    case "video.asset.created": {
+      // Redundant with the above in many cases, but safe to set processing too
+      if (uploadId) {
+        await this.videosRepo.markProcessing({ uploadId, assetId });
+        return `processing (upload=${uploadId}, asset=${assetId ?? "none"})`;
+      }
+      return `noop: asset.created (no upload_id, asset=${assetId ?? "none"})`;
+    }
+
+    case "video.asset.ready": {
+      await this.videosRepo.markReady({
+        uploadId: uploadId!,              // present on this event
+        assetId: assetId!,                // asset id
+        playbackId: d.playback_ids?.[0]?.id ?? null,
+        duration: typeof d.duration === "number" ? d.duration : null,
+      });
+      return `video ready (upload=${uploadId}, asset=${assetId}, playback=${d.playback_ids?.[0]?.id ?? "none"})`;
+    }
+
+    case "video.asset.errored": {
+      const reason =
+        typeof d.errors === "string" ? d.errors :
+        Array.isArray(d.errors?.messages) ? d.errors.messages.join("; ") :
+        d.errors?.type ?? null;
+      if (uploadId) await this.videosRepo.markErrored({ uploadId, reason });
+      return `video errored (upload=${uploadId ?? "none"})`;
+    }
+
+    default:
+      return `ignored event type: ${evt.type}`;
   }
+}
 
   static extractObject(evt: MuxEvent): { objectType: string | null; objectId: string | null } {
     // Prefer asset context if present; otherwise fall back to upload

@@ -50,20 +50,18 @@ export class VideosMySqlRepo {
   }
 
   async linkUpload(params: { uploadId: string; videoId: string }): Promise<void> {
-    const { uploadId, videoId } = params;
-    if (!uploadId) throw new Error("linkUpload: uploadId is required");
-    if (!videoId) throw new Error("linkUpload: videoId is required");
-
-    await pool.execute<ResultSetHeader>(
-      `
-      UPDATE videos
-         SET mux_upload_id = :uploadId,
-             updated_at = NOW(3)
-       WHERE id = :videoId
-      `,
-      { uploadId, videoId }
-    );
+  const { uploadId, videoId } = params;
+  const [r] = await pool.execute<ResultSetHeader>(
+    `UPDATE videos
+       SET mux_upload_id = :uploadId,
+           updated_at = NOW(3)
+     WHERE id = :videoId`,
+    { uploadId, videoId }
+  );
+  if (r.affectedRows === 0) {
+    throw new Error(`linkUpload: no row updated (videoId=${videoId})`);
   }
+}
 
   async markReady(params: {
     uploadId: string;
@@ -159,4 +157,49 @@ async markProcessing(params: { uploadId: string; assetId?: string | null }): Pro
     );
     return rows.map(rowToVideo);
   }
+}
+
+// ADD (near bottom)
+export type FeedItemRow = RowDataPacket & {
+  id: string;
+  title: string | null;
+  mux_playback_id: string | null;
+  duration_seconds: number | null;
+  created_at: Date;
+};
+
+
+export async function listFeedPage(
+  limit: number,
+  before?: { createdAtIso: string; id: string }
+  ): Promise<FeedItemRow[]> {
+  const params: any = { limit };
+
+
+  if (!before) {
+    const [rows] = await pool.execute<FeedItemRow[]>(
+      `SELECT id, title, mux_playback_id, duration_seconds, created_at
+      FROM videos
+      WHERE status = 'ready'
+      ORDER BY created_at DESC, id DESC
+      LIMIT :limit`,
+      params
+    );
+  return rows;
+}
+
+
+// MySQL tuple comparison for stable pagination
+params.createdAt = new Date(before.createdAtIso);
+params.id = before.id;
+const [rows] = await pool.execute<FeedItemRow[]>(
+  `SELECT id, title, mux_playback_id, duration_seconds, created_at
+  FROM videos
+  WHERE status = 'ready'
+  AND (created_at < :createdAt OR (created_at = :createdAt AND id < :id))
+  ORDER BY created_at DESC, id DESC
+  LIMIT :limit`,
+  params
+);
+return rows;
 }
