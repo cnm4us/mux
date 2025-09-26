@@ -22,13 +22,14 @@ export default function Feed() {
     const [cursor, setCursor] = React.useState<string | undefined>();
     const [active, setActive] = React.useState(0);
     const [urls, setUrls] = React.useState<Record<string, string>>({});
+    const [needsGesture, setNeedsGesture] = React.useState(false); // ✅ move inside component
 
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const playerRef = React.useRef<React.ComponentRef<typeof MuxPlayer> | null>(null);
 
     const { soundOn, setSoundOn } = useSoundPref();
 
-    // EFFECT 1: load initial feed
+    /* EFFECT 1: load initial feed */
     React.useEffect(() => {
         let mounted = true;
         fetchFeed()
@@ -42,7 +43,7 @@ export default function Feed() {
         return () => { mounted = false; };
     }, []);
 
-    // EFFECT 2: prefetch play URLs (active + next)
+    /* EFFECT 2: prefetch play URLs (active + next) */
     React.useEffect(() => {
         const cur = items[active];
         const nxt = items[active + 1];
@@ -57,7 +58,7 @@ export default function Feed() {
         });
     }, [active, items, urls]);
 
-    // EFFECT 3: infinite pagination
+    /* EFFECT 3: infinite pagination */
     React.useEffect(() => {
         if (items.length === 0 || !cursor) return;
         if (active < items.length - 2) return;
@@ -73,7 +74,7 @@ export default function Feed() {
         return () => { mounted = false; };
     }, [active, cursor, items.length]);
 
-    // EFFECT 4: observe which card is active
+    /* EFFECT 4: observe which card is active */
     React.useEffect(() => {
         const root = containerRef.current;
         if (!root) return;
@@ -96,10 +97,11 @@ export default function Feed() {
         return () => obs.disconnect();
     }, [items.length]);
 
-    // EFFECT 5: track player creation/reuse/unmount
+    /* EFFECT 5: track player creation/reuse/unmount (should be once) */
     React.useEffect(() => {
         const el = playerRef.current as any;
         if (!el) return;
+
         if (!el.__muxId) {
             el.__muxId = ++__PLAYER_SEQ;
             dbg(`player #${el.__muxId} CREATED`);
@@ -109,7 +111,7 @@ export default function Feed() {
         return () => { dbg(`player #${el?.__muxId ?? "?"} UNMOUNTED`); };
     }, []);
 
-    // EFFECT 6: swap src & play on active change
+    /* EFFECT 6: swap src & play on active change (with iOS gesture fallback) */
     React.useEffect(() => {
         const el = playerRef.current as any;
         const item = items[active];
@@ -117,15 +119,30 @@ export default function Feed() {
         if (!el || !item || !url) return;
 
         const wantMuted = !soundOn;
+
         const waitFor = (evt: string) =>
             new Promise<void>((res) => {
                 const on = () => { el.removeEventListener(evt, on as any); res(); };
                 el.addEventListener(evt, on as any, { once: true });
             });
 
+        const waitForUserGesture = () =>
+            new Promise<void>((res) => {
+                const handler = () => { cleanup(); res(); };
+                const cleanup = () => {
+                    window.removeEventListener("pointerdown", handler, true);
+                    window.removeEventListener("touchstart", handler, true);
+                    window.removeEventListener("click", handler, true);
+                };
+                window.addEventListener("pointerdown", handler, true);
+                window.addEventListener("touchstart", handler, true);
+                window.addEventListener("click", handler, true);
+            });
+
         const run = async () => {
             const id = el.__muxId ?? "?";
             dbg(`player #${id} swap -> idx ${active} (${item.id}), url:${tail(url)}, wantMuted:${wantMuted}`);
+
             try { await el.pause?.(); } catch { }
 
             if (el.src !== url) {
@@ -135,40 +152,52 @@ export default function Feed() {
 
             el.muted = wantMuted;
 
-            dbg(`player #${id} waiting playbackready…`);
-            await waitFor("playbackready");
-            dbg(`player #${id} playbackready`);
+            dbg(`player #${id} waiting ready…`);
+            await Promise.race([waitFor("playbackready"), waitFor("loadedmetadata")]);
+            dbg(`player #${id} ready`);
 
             try {
+                setNeedsGesture(false);
                 dbg(`player #${id} play() attempt (muted:${el.muted})`);
                 await el.play();
                 dbg(`player #${id} play() OK`);
+                return;
             } catch (err) {
-                dbg(`player #${id} play() FAILED (muted:${el.muted})`, err);
-                if (!wantMuted) {
-                    await new Promise(r => setTimeout(r, 50));
-                    try {
-                        dbg(`player #${id} retry play() (muted:${el.muted})`);
-                        await el.play();
-                        dbg(`player #${id} retry OK`);
-                        return;
-                    } catch (err2) {
-                        dbg(`player #${id} retry FAILED`, err2);
-                    }
-                }
-                el.muted = true;
+                dbg(`player #${id} play() FAILED first`, err);
+            }
+
+            if (!wantMuted) {
                 try {
-                    dbg(`player #${id} fallback: muted=true; play()`);
+                    await new Promise(r => setTimeout(r, 60));
+                    dbg(`player #${id} retry play() (muted:${el.muted})`);
                     await el.play();
-                    dbg(`player #${id} fallback OK`);
-                } catch (err3) {
-                    dbg(`player #${id} fallback FAILED`, err3);
+                    dbg(`player #${id} retry OK`);
+                    return;
+                } catch (err2) {
+                    dbg(`player #${id} retry FAILED`, err2);
                 }
             }
+
+            // iOS wants a gesture — arm one-shot listener and show overlay
+            setNeedsGesture(true);
+            dbg(`player #${id} awaiting user gesture to start…`);
+            await waitForUserGesture();
+            setNeedsGesture(false);
+
+            el.muted = true; // start muted to satisfy policy; Sound flow can unmute later
+            try {
+                dbg(`player #${id} gesture play()`);
+                await el.play();
+                dbg(`player #${id} gesture play OK`);
+            } catch (e3) {
+                dbg(`player #${id} gesture play FAILED`, e3);
+            }
         };
+
         void run();
     }, [active, items, urls, soundOn]);
 
+    /* Tap to enable sound (after playback is running) */
     const handleVideoTap = () => {
         const el = playerRef.current as any;
         setSoundOn(true);
@@ -183,10 +212,18 @@ export default function Feed() {
 
     return (
         <div ref={containerRef} className="feed">
+            {/* Sticky player (tap on it either kicks off first play, or enables sound) */}
             <div
                 onClick={(e) => {
                     const target = e.target as HTMLElement;
-                    if (target.closest("mux-player")) handleVideoTap();
+                    if (!target.closest("mux-player")) return;
+                    if (needsGesture) {
+                        setNeedsGesture(false);
+                        const el = playerRef.current as any;
+                        el?.play?.().catch(() => { });
+                    } else {
+                        handleVideoTap();
+                    }
                 }}
                 style={{
                     position: "sticky",
@@ -212,6 +249,7 @@ export default function Feed() {
                 />
             </div>
 
+            {/* Cards: overlays + counters; player itself is sticky above */}
             {items.map((it, i) => (
                 <section className="card" key={it.id} data-idx={i}>
                     <MuxPlayerCard
@@ -221,6 +259,7 @@ export default function Feed() {
                         total={items.length}
                         soundOn={soundOn}
                         onTapSound={handleVideoTap}
+                        needsGesture={needsGesture && i === active}
                     />
                 </section>
             ))}

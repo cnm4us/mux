@@ -1,10 +1,6 @@
+// MuxPlayerCard.tsx
 export default function MuxPlayerCard({
-    active,
-    title,
-    index,
-    total,
-    soundOn,
-    onTapSound
+    active, title, index, total, soundOn, onTapSound, needsGesture
 }: {
     active: boolean;
     title: string;
@@ -12,25 +8,28 @@ export default function MuxPlayerCard({
     total: number;
     soundOn: boolean;
     onTapSound: () => void;
+    needsGesture?: boolean;
 }) {
     return (
         <>
-            {/* Title */}
             <div className="title">{title}</div>
-
-            {/* Index badge */}
             <div className="badge">{index} / {total}</div>
 
-            {/* Sound prompt overlay (only when active and pref says sound on but iOS might have blocked it) */}
-            {active && !soundOn && (
+            {active && needsGesture && (
                 <button
                     className="btn btn-compact"
-                    style={{
-                        position: "absolute",
-                        top: 12,
-                        left: 12,
-                        zIndex: 2
-                    }}
+                    style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 2 }}
+                    // stops propagation so wrapper click doesn’t double-fire
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    ▶︎ Tap to play
+                </button>
+            )}
+
+            {active && !soundOn && !needsGesture && (
+                <button
+                    className="btn btn-compact"
+                    style={{ position: "absolute", top: 12, left: 12, zIndex: 2 }}
                     onClick={onTapSound}
                 >
                     🔇 Tap for sound
@@ -39,3 +38,4 @@ export default function MuxPlayerCard({
         </>
     );
 }
+
