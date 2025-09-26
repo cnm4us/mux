@@ -1,30 +1,41 @@
-import { useEffect, useRef } from "react";
-import type * as React from "react";
-import MuxPlayer from "@mux/mux-player-react";
-
-type MuxRef = React.ElementRef<typeof MuxPlayer>;
-
-export default function MuxPlayerCard({ src, active }: { src?: string; active: boolean }) {
-    const ref = useRef<MuxRef>(null);
-
-    useEffect(() => {
-        const el = ref.current;
-        if (!el) return;
-        if (active) el.play?.().catch?.(() => { });
-        else el.pause?.();
-    }, [active]);
-
+export default function MuxPlayerCard({
+    active,
+    title,
+    index,
+    total,
+    soundOn,
+    onTapSound
+}: {
+    active: boolean;
+    title: string;
+    index: number;
+    total: number;
+    soundOn: boolean;
+    onTapSound: () => void;
+}) {
     return (
-        <MuxPlayer
-            ref={ref}
-            className="video-el"
-            streamType="on-demand"
-            preload="metadata"
-            autoPlay={false}
-            muted
-            playsInline
-            nohotkeys
-            src={src || undefined}
-        />
+        <>
+            {/* Title */}
+            <div className="title">{title}</div>
+
+            {/* Index badge */}
+            <div className="badge">{index} / {total}</div>
+
+            {/* Sound prompt overlay (only when active and pref says sound on but iOS might have blocked it) */}
+            {active && !soundOn && (
+                <button
+                    className="btn btn-compact"
+                    style={{
+                        position: "absolute",
+                        top: 12,
+                        left: 12,
+                        zIndex: 2
+                    }}
+                    onClick={onTapSound}
+                >
+                    🔇 Tap for sound
+                </button>
+            )}
+        </>
     );
 }

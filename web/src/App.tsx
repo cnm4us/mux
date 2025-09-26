@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Routes, Route, useParams, useLocation, Navigate } from "react-router-dom";
 import MuxPlayer from "@mux/mux-player-react";
+import Player from "@/components/Player";
 
 import Feed from "@/components/Feed";
 import Uploader from "@/components/Uploader";
@@ -40,7 +41,7 @@ function SinglePlayerPage({ pbOverride }: { pbOverride?: string }) {
         <div style={{ maxWidth: 420, margin: "40px auto" }}>
             <h1>Mux POC</h1>
             <small style={{ wordBreak: "break-all" }}>{src}</small>
-            <MuxPlayer
+            <Player
                 src={src}
                 streamType="on-demand"
                 autoPlay
