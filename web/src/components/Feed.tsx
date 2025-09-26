@@ -1,117 +1,59 @@
-// Feed.tsx
+// web/src/components/Feed.tsx
 import * as React from "react";
 import MuxPlayer from "@mux/mux-player-react";
 import Player from "@/components/Player";
-import { fetchFeed, getPlayUrl, type FeedItem } from "../hooks/useFeed";
+import { fetchFeed, getPlayUrl, type FeedItem, getPosterUrl } from "../hooks/useFeed";
 import MuxPlayerCard from "./MuxPlayerCard";
 import { useSoundPref } from "@/hooks/useSoundPref";
 
 let __PLAYER_SEQ = 0;
-function dbg(...args: any[]) {
-    // @ts-ignore
-    if (typeof window !== "undefined" && !window.__MUX_DEBUG) return;
-    // eslint-disable-next-line no-console
-    console.log("[mux-feed]", ...args);
-}
-function tail(u: string) {
-    try { const q = new URL(u); return q.pathname.split("/").pop(); } catch { return u.slice(-30); }
-}
+function dbg(...args: any[]) { /* unchanged */ }
+function tail(u: string) { /* unchanged */ }
 
 export default function Feed() {
     const [items, setItems] = React.useState<FeedItem[]>([]);
     const [cursor, setCursor] = React.useState<string | undefined>();
     const [active, setActive] = React.useState(0);
     const [urls, setUrls] = React.useState<Record<string, string>>({});
-    const [needsGesture, setNeedsGesture] = React.useState(false); // ✅ move inside component
+    const [posters, setPosters] = React.useState<Record<string, string>>({});
+    const [paused, setPaused] = React.useState<Record<string, boolean>>({});
+    const [needsGesture, setNeedsGesture] = React.useState(false);
 
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const playerRef = React.useRef<React.ComponentRef<typeof MuxPlayer> | null>(null);
 
     const { soundOn, setSoundOn } = useSoundPref();
 
-    /* EFFECT 1: load initial feed */
-    React.useEffect(() => {
-        let mounted = true;
-        fetchFeed()
-            .then(({ items, nextCursor }) => {
-                if (!mounted) return;
-                setItems(items);
-                setCursor(nextCursor);
-                dbg("feed loaded:", items.length, "items");
-            })
-            .catch((e) => dbg("feed load error", e));
-        return () => { mounted = false; };
-    }, []);
+    // EFFECT 1: load initial feed (unchanged)
+    React.useEffect(() => { /* unchanged */ }, []);
 
-    /* EFFECT 2: prefetch play URLs (active + next) */
+    // EFFECT 2: prefetch play URLs (active + next)  (unchanged)
+    React.useEffect(() => { /* unchanged */ }, [active, items, urls]);
+
+    // NEW: prefetch posters (active + next)
     React.useEffect(() => {
-        const cur = items[active];
-        const nxt = items[active + 1];
-        [cur, nxt].forEach((it) => {
-            if (!it || urls[it.id]) return;
-            getPlayUrl(it.id)
-                .then((u) => {
-                    setUrls((m) => ({ ...m, [it.id]: u }));
-                    dbg("prefetched url:", it.id, tail(u));
-                })
-                .catch(() => { });
+        const ids = [items[active], items[active + 1]].filter(Boolean) as FeedItem[];
+        ids.forEach((it) => {
+            if (posters[it.id]) return;
+            const p = getPosterUrl(it);
+            if (!p) return;
+            setPosters((m) => ({ ...m, [it.id]: p }));
+            const img = new Image();
+            img.decoding = "async";
+            img.src = p;
         });
-    }, [active, items, urls]);
+    }, [active, items, posters]);
 
-    /* EFFECT 3: infinite pagination */
-    React.useEffect(() => {
-        if (items.length === 0 || !cursor) return;
-        if (active < items.length - 2) return;
-        let mounted = true;
-        fetchFeed(cursor)
-            .then(({ items: more, nextCursor }) => {
-                if (!mounted) return;
-                setItems((prev) => [...prev, ...more]);
-                setCursor(nextCursor);
-                dbg("feed appended:", more.length, "more (total", items.length + more.length, ")");
-            })
-            .catch((e) => dbg("feed append error", e));
-        return () => { mounted = false; };
-    }, [active, cursor, items.length]);
+    // EFFECT 3: infinite pagination (unchanged)
+    React.useEffect(() => { /* unchanged */ }, [active, cursor, items.length]);
 
-    /* EFFECT 4: observe which card is active */
-    React.useEffect(() => {
-        const root = containerRef.current;
-        if (!root) return;
-        const cards = Array.from(root.querySelectorAll("[data-idx]")) as HTMLElement[];
-        const obs = new IntersectionObserver(
-            (entries) => {
-                entries.forEach((e) => {
-                    if (e.isIntersecting) {
-                        const idx = Number((e.target as HTMLElement).dataset.idx);
-                        if (!Number.isNaN(idx)) {
-                            dbg("active ->", idx);
-                            setActive(idx);
-                        }
-                    }
-                });
-            },
-            { root, threshold: 0.6 }
-        );
-        cards.forEach((c) => obs.observe(c));
-        return () => obs.disconnect();
-    }, [items.length]);
+    // EFFECT 4: observe which card is active (unchanged)
+    React.useEffect(() => { /* unchanged */ }, [items.length]);
 
-    /* EFFECT 5: track player creation/reuse/unmount (should be once) */
-    React.useEffect(() => {
-        const el = playerRef.current as any;
-        if (!el) return;
+    // EFFECT 5: track player creation/reuse (unchanged)
+    React.useEffect(() => { /* unchanged */ }, []);
 
-        if (!el.__muxId) {
-            el.__muxId = ++__PLAYER_SEQ;
-            dbg(`player #${el.__muxId} CREATED`);
-        } else {
-            dbg(`player #${el.__muxId} REUSED`);
-        }
-        return () => { dbg(`player #${el?.__muxId ?? "?"} UNMOUNTED`); };
-    }, []);
-
-    /* EFFECT 6: swap src & play on active change (with iOS gesture fallback) */
+    // EFFECT 6: swap src & play on active change (with gesture & pause-per-card)
     React.useEffect(() => {
         const el = playerRef.current as any;
         const item = items[active];
@@ -119,6 +61,7 @@ export default function Feed() {
         if (!el || !item || !url) return;
 
         const wantMuted = !soundOn;
+        const isPausedByUser = !!paused[item.id];
 
         const waitFor = (evt: string) =>
             new Promise<void>((res) => {
@@ -141,94 +84,117 @@ export default function Feed() {
 
         const run = async () => {
             const id = el.__muxId ?? "?";
-            dbg(`player #${id} swap -> idx ${active} (${item.id}), url:${tail(url)}, wantMuted:${wantMuted}`);
-
+            const poster = posters[item.id];
             try { await el.pause?.(); } catch { }
+
+            // Set poster first to avoid black flash
+            if (poster && el.poster !== poster) {
+                el.poster = poster;
+            }
 
             if (el.src !== url) {
                 el.src = url;
-                dbg(`player #${id} src set`);
             }
 
             el.muted = wantMuted;
 
-            dbg(`player #${id} waiting ready…`);
+            // Wait for readiness
             await Promise.race([waitFor("playbackready"), waitFor("loadedmetadata")]);
-            dbg(`player #${id} ready`);
+
+            // Respect manual pause on this card: don't auto-play if user paused it
+            if (isPausedByUser) {
+                dbg(`player #${id} respecting pausedByUser on ${item.id}`);
+                return;
+            }
 
             try {
                 setNeedsGesture(false);
-                dbg(`player #${id} play() attempt (muted:${el.muted})`);
                 await el.play();
-                dbg(`player #${id} play() OK`);
                 return;
-            } catch (err) {
-                dbg(`player #${id} play() FAILED first`, err);
-            }
+            } catch { }
 
             if (!wantMuted) {
                 try {
-                    await new Promise(r => setTimeout(r, 60));
-                    dbg(`player #${id} retry play() (muted:${el.muted})`);
+                    await new Promise((r) => setTimeout(r, 60));
                     await el.play();
-                    dbg(`player #${id} retry OK`);
                     return;
-                } catch (err2) {
-                    dbg(`player #${id} retry FAILED`, err2);
-                }
+                } catch { }
             }
 
-            // iOS wants a gesture — arm one-shot listener and show overlay
+            // Fallback: require a gesture
             setNeedsGesture(true);
-            dbg(`player #${id} awaiting user gesture to start…`);
             await waitForUserGesture();
             setNeedsGesture(false);
-
-            el.muted = true; // start muted to satisfy policy; Sound flow can unmute later
-            try {
-                dbg(`player #${id} gesture play()`);
-                await el.play();
-                dbg(`player #${id} gesture play OK`);
-            } catch (e3) {
-                dbg(`player #${id} gesture play FAILED`, e3);
-            }
+            el.muted = true;
+            try { await el.play(); } catch { }
         };
 
         void run();
-    }, [active, items, urls, soundOn]);
+    }, [active, items, urls, soundOn, paused, posters]);
 
-    /* Tap to enable sound (after playback is running) */
-    const handleVideoTap = () => {
+    // Toggle pause for current card only
+    const togglePauseActive = async () => {
         const el = playerRef.current as any;
-        setSoundOn(true);
-        dbg(`gesture: enable sound → player #${el?.__muxId ?? "?"}`);
-        if (el) {
-            el.muted = false;
-            el.play?.()
-                .then(() => dbg(`player #${el.__muxId} play() after tap OK`))
-                .catch((e: any) => dbg(`player #${el.__muxId} play() after tap FAILED`, e));
+        const item = items[active];
+        if (!el || !item) return;
+
+        if (el.paused) {
+            setPaused((m) => ({ ...m, [item.id]: false }));
+            try { await el.play(); } catch { }
+        } else {
+            setPaused((m) => ({ ...m, [item.id]: true }));
+            try { await el.pause(); } catch { }
         }
     };
 
+    // Tap on video:
+    // - If we still need a gesture: start playback
+    // - Else: toggle pause for this card (sound remains handled by the overlay button)
+    const handleVideoAreaClick = () => {
+        if (needsGesture) {
+            setNeedsGesture(false);
+            const el = playerRef.current as any;
+            el?.play?.().catch(() => { });
+        } else {
+            togglePauseActive();
+        }
+    };
+
+    // Keep global “tap for sound” overlay
+    const handleTapForSound = () => {
+        const el = playerRef.current as any;
+        setSoundOn(true);
+        if (el) {
+            el.muted = false;
+            el.play?.().catch(() => { });
+        }
+    };
+
+    // Basic layout constants
+    const NAV_H = 64; // adjust to your real bottom-nav height in px
+
     return (
-        <div ref={containerRef} className="feed">
-            {/* Sticky player (tap on it either kicks off first play, or enables sound) */}
+        <div
+            ref={containerRef}
+            className="feed"
+            style={{
+                // leave room for the fixed bottom nav
+                paddingBottom: `calc(${NAV_H}px + env(safe-area-inset-bottom, 0px))`,
+                scrollSnapType: "y mandatory",
+                overflowY: "auto"
+            }}
+        >
+            {/* Sticky player occupies full viewport, not under nav */}
             <div
                 onClick={(e) => {
                     const target = e.target as HTMLElement;
                     if (!target.closest("mux-player")) return;
-                    if (needsGesture) {
-                        setNeedsGesture(false);
-                        const el = playerRef.current as any;
-                        el?.play?.().catch(() => { });
-                    } else {
-                        handleVideoTap();
-                    }
+                    handleVideoAreaClick();
                 }}
                 style={{
                     position: "sticky",
                     top: 0,
-                    height: "100vh",
+                    height: "100dvh",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -245,28 +211,39 @@ export default function Feed() {
                     muted={!soundOn}
                     playsInline
                     nohotkeys
+                    // poster is set dynamically before src swap; keep size full
                     style={{ width: "100%", height: "100%" }}
                 />
             </div>
 
-            {/* Cards: overlays + counters; player itself is sticky above */}
+            {/* Cards: supply poster to show behind sticky player during scroll */}
             {items.map((it, i) => (
-                <section className="card" key={it.id} data-idx={i}>
+                <section
+                    className="card"
+                    key={it.id}
+                    data-idx={i}
+                    style={{
+                        position: "relative",
+                        minHeight: "100dvh",
+                        scrollSnapAlign: "start",
+                        background: posters[it.id]
+                            ? `center / cover no-repeat url("${posters[it.id]}")`
+                            : "black"
+                    }}
+                >
                     <MuxPlayerCard
                         active={i === active}
                         title={it.title || "Untitled"}
                         index={i + 1}
                         total={items.length}
                         soundOn={soundOn}
-                        onTapSound={handleVideoTap}
+                        onTapSound={handleTapForSound}
                         needsGesture={needsGesture && i === active}
                     />
                 </section>
             ))}
 
-            {items.length === 0 && (
-                <section className="card"><div>Loading feed…</div></section>
-            )}
+            {items.length === 0 && <section className="card"><div>Loading feed…</div></section>}
         </div>
     );
 }

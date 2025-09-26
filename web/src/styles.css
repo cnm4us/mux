@@ -26,8 +26,9 @@ body {
 
 /* App main container: mobile-first spacing for bottom bar */
 .app-main {
-    min-height: 100vh;
-    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+    /* Dynamic viewport avoids iOS URL bar jitter */
+    min-height: 100dvh;
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Desktop: shift content right for left rail; hide bottom bar */
@@ -40,13 +41,16 @@ body {
 
 /* --- feed & cards --- */
 .feed {
-    height: 100vh;
+    /* Let the sticky player claim full viewport, while the scroller
+       leaves room for the fixed bottom bar */
+    min-height: 100dvh;
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
     scroll-snap-type: y mandatory;
 }
 
 .card {
-    height: 100vh;
+    min-height: 100dvh; /* avoids truncation under URL bar */
     position: relative;
     scroll-snap-align: start;
     display: flex;
@@ -114,9 +118,12 @@ mux-player,
 .mux-player {
     width: 100% !important;
     max-width: 100%;
-    height: auto;
+    height: 100% !important;
+    /* <-- fill the viewport */
     display: block;
     background: #000;
+    object-fit: cover;
+    /* <-- eliminate top/bottom gaps */
 }
 
 .badge {
@@ -144,8 +151,8 @@ mux-player,
 
 .bottom-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    /* 4 tabs + sound */
+    grid-template-columns: repeat(4, 1fr);
+    /* Feed, Upload, Inbox, Profile */
     height: 100%;
     align-items: center;
     text-align: center;

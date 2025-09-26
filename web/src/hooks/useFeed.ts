@@ -15,3 +15,9 @@ export async function getPlayUrl(id: string) {
     const data = await res.json()
     return data.playback?.url as string
 }
+
+export function getPosterUrl(item: FeedItem, h = 900) {
+  if (!item.playbackId) return undefined;
+  // Mux Image service: crop smartly; pick a vertical-friendly height
+  return `https://image.mux.com/${item.playbackId}/thumbnail.jpg?time=1&fit_mode=smartcrop&height=${h}`;
+}

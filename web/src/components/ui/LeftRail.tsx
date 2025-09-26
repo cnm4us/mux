@@ -13,7 +13,6 @@ export default function LeftRail() {
     const { pathname } = useLocation();
     return (
         <aside className="left-rail">
-            <SoundToggle />
             <nav className="left-rail-nav">
                 {items.map(i => (
                     <Link key={i.to} className={`left-link ${pathname === i.to ? "active" : ""}`} to={i.to}>

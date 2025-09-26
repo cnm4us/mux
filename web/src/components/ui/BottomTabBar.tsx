@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import SoundToggle from "./SoundToggle";
+
 
 const tabs = [
     { to: "/", label: "Feed" },
@@ -19,9 +19,6 @@ export default function BottomTabBar() {
                         {t.label}
                     </Link>
                 ))}
-                <div className="tab">
-                    <SoundToggle compact />
-                </div>
             </div>
         </nav>
     );

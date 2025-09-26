@@ -1,0 +1,19 @@
+(function enableRemoteConsole() {
+  if (!('fetch' in window)) return;
+  const send = (level: string, args: any[]) => {
+    try {
+      fetch('/api/v1/_log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level, args, ua: navigator.userAgent, ts: Date.now() }),
+      });
+    } catch {}
+  };
+  ['log','warn','error'].forEach((lvl) => {
+    const orig = console[lvl as 'log'];
+    console[lvl as 'log'] = function (...a: any[]) {
+      orig.apply(console, a);
+      send(lvl, a);
+    };
+  });
+})();
