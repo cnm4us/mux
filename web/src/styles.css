@@ -209,3 +209,50 @@ mux-player,
 .left-link.active {
     font-weight: 600;
 }
+
+mux-player {
+    /* Hide all controls at once */
+    --controls: none;
+
+    /* Target all sections by excluding the section prefix */
+    --play-button: none;
+    --live-button: none;
+    --seek-backward-button: none;
+    --seek-forward-button: none;
+    --mute-button: none;
+    --captions-button: none;
+    --airplay-button: none;
+    --pip-button: none;
+    --fullscreen-button: none;
+    --cast-button: none;
+    --playback-rate-button: none;
+    --volume-range: none;
+    --time-range: none;
+    --time-display: none;
+    --title-display: none;
+    --duration-display: none;
+}
+
+/* Big translucent HUD icon over the video */
+.hud-indicator {
+    font-size: clamp(72px, 14vw, 140px);
+    /* ~3x larger */
+    line-height: 1;
+    padding: 0.1em 0.25em;
+    border-radius: 0.25em;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(2px);
+    transform: scale(1);
+    transition: opacity 200ms ease, transform 200ms ease;
+}
+
+/* Very transparent while playing; more visible when paused */
+.hud-indicator.is-playing {
+    opacity: 0;
+}
+
+.hud-indicator.is-paused {
+    opacity: 0.45;
+    transform: scale(1.02);
+}

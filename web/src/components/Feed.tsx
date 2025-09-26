@@ -22,7 +22,9 @@ export default function Feed() {
     const [cursor, setCursor] = React.useState<string | undefined>();
     const [active, setActive] = React.useState(0);
     const [urls, setUrls] = React.useState<Record<string, string>>({});
-    const [needsGesture, setNeedsGesture] = React.useState(false); // ✅ move inside component
+    const [paused, setPaused] = React.useState<Record<string, boolean>>({});
+    const [needsGesture, setNeedsGesture] = React.useState(false);
+    const [hasUserGesture, setHasUserGesture] = React.useState(false);
 
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const playerRef = React.useRef<React.ComponentRef<typeof MuxPlayer> | null>(null);
@@ -111,7 +113,7 @@ export default function Feed() {
         return () => { dbg(`player #${el?.__muxId ?? "?"} UNMOUNTED`); };
     }, []);
 
-    /* EFFECT 6: swap src & play on active change (with iOS gesture fallback) */
+    /* EFFECT 6: swap src & play on active change (respect per-card pause) */
     React.useEffect(() => {
         const el = playerRef.current as any;
         const item = items[active];
@@ -119,6 +121,7 @@ export default function Feed() {
         if (!el || !item || !url) return;
 
         const wantMuted = !soundOn;
+        const isPausedByUser = !!paused[item.id];
 
         const waitFor = (evt: string) =>
             new Promise<void>((res) => {
@@ -143,9 +146,9 @@ export default function Feed() {
             const id = el.__muxId ?? "?";
             dbg(`player #${id} swap -> idx ${active} (${item.id}), url:${tail(url)}, wantMuted:${wantMuted}`);
 
-            try { await el.pause?.(); } catch { }
 
             if (el.src !== url) {
+                try { await el.pause?.(); } catch { }
                 el.src = url;
                 dbg(`player #${id} src set`);
             }
@@ -155,6 +158,12 @@ export default function Feed() {
             dbg(`player #${id} waiting ready…`);
             await Promise.race([waitFor("playbackready"), waitFor("loadedmetadata")]);
             dbg(`player #${id} ready`);
+
+            // If user paused this specific card, don't auto-play it.
+            if (isPausedByUser) {
+                dbg(`player #${id} respecting pausedByUser on ${item.id}`);
+                return;
+            }
 
             try {
                 setNeedsGesture(false);
@@ -198,7 +207,7 @@ export default function Feed() {
     }, [active, items, urls, soundOn]);
 
     /* Tap to enable sound (after playback is running) */
-    const handleVideoTap = () => {
+    const handleVideoTapForSound = () => {
         const el = playerRef.current as any;
         setSoundOn(true);
         dbg(`gesture: enable sound → player #${el?.__muxId ?? "?"}`);
@@ -210,21 +219,37 @@ export default function Feed() {
         }
     };
 
+    /* Tap to toggle pause ONLY for the current card */
+    const togglePauseActive = async () => {
+        const el = playerRef.current as any;
+        const item = items[active];
+        if (!el || !item) return;
+        if (el.paused) {
+            try {
+                await el.play();            // try with current mute state
+                setPaused((m) => ({ ...m, [item.id]: false }));
+                return;
+            } catch {
+                try {
+                    el.muted = true;          // policy-safe fallback
+                    await el.play();
+                    setPaused((m) => ({ ...m, [item.id]: false }));
+                    return;
+                } catch {
+                    setNeedsGesture(true);    // next tap will satisfy
+                    return;
+                }
+            }
+        } else {
+            setPaused((m) => ({ ...m, [item.id]: true }));
+            try { await el.pause(); } catch { }
+        }
+    };
+
     return (
         <div ref={containerRef} className="feed">
-            {/* Sticky player (tap on it either kicks off first play, or enables sound) */}
+            {/* Sticky player */}
             <div
-                onClick={(e) => {
-                    const target = e.target as HTMLElement;
-                    if (!target.closest("mux-player")) return;
-                    if (needsGesture) {
-                        setNeedsGesture(false);
-                        const el = playerRef.current as any;
-                        el?.play?.().catch(() => { });
-                    } else {
-                        handleVideoTap();
-                    }
-                }}
                 style={{
                     position: "sticky",
                     top: 0,
@@ -233,7 +258,7 @@ export default function Feed() {
                     alignItems: "center",
                     justifyContent: "center",
                     pointerEvents: "auto",
-                    zIndex: 1
+                    zIndex: 1,
                 }}
             >
                 <Player
@@ -245,8 +270,77 @@ export default function Feed() {
                     muted={!soundOn}
                     playsInline
                     nohotkeys
-                    style={{ width: "100%", height: "100%" }}
+                    /* Disable pointer to avoid fighting built-in center play button */
+                    style={{ width: "100%", height: "100%", pointerEvents: "none" }}
                 />
+
+                {/* Full-screen invisible hit area over the player (click + keyboard) */}
+                <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Play or pause"
+                    aria-pressed={!!paused[items[active]?.id]}
+                    onKeyDown={(e) => {
+                        if (e.key === " " || e.key === "Enter") {
+                            e.preventDefault();
+                            togglePauseActive();
+                        }
+                    }}
+                    onClick={async () => {
+                        const el = playerRef.current as any;
+                        if (!el) return;
+                        // First ever tap: enable sound and start playback with audio
+                        if (!hasUserGesture) {
+                            setHasUserGesture(true);
+                            setNeedsGesture(false);
+                            setSoundOn(true);
+                            try {
+                                el.muted = false;
+                                await el.play();
+                            } catch {
+                                // Fallback: try muted once, then user can tap again
+                                try { el.muted = true; await el.play(); } catch { }
+                            }
+                            return;
+                        }
+                        // Subsequent taps: toggle pause/play for the active item
+                        void togglePauseActive();
+                    }}
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        zIndex: 3,              // below our small overlay buttons, above player
+                        background: "transparent",
+                        cursor: "pointer",
+                        outline: "none",
+                    }}
+                />
+
+                {/* HUD: big translucent play/pause icon (non-interactive) */}
+                <div
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 4,
+                        pointerEvents: "none",
+                    }}
+                >
+                    {(() => {
+                        const curId = items[active]?.id;
+                        const showPaused = !hasUserGesture || !!paused[curId];
+                        return (
+                            <div
+                                className={`hud-indicator ${showPaused ? "is-paused" : "is-playing"}`}
+                                aria-hidden="true"
+                            >
+                                {showPaused ? "▶" : "⏸"}
+                            </div>
+                        );
+                    })()}
+                </div>
             </div>
 
             {/* Cards: overlays + counters; player itself is sticky above */}
@@ -257,9 +351,6 @@ export default function Feed() {
                         title={it.title || "Untitled"}
                         index={i + 1}
                         total={items.length}
-                        soundOn={soundOn}
-                        onTapSound={handleVideoTap}
-                        needsGesture={needsGesture && i === active}
                     />
                 </section>
             ))}
