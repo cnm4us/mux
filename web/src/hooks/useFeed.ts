@@ -59,9 +59,10 @@ export async function getSignedPosterUrl(
   playbackId: string,
   opts?: { time?: number; height?: number; width?: number; fit_mode?: "smartcrop" | "pad" | "crop"; format?: "jpg" | "png" }
 ) {
+  // Only include parameters that are explicitly provided. Server has defaults.
   const q = new URLSearchParams({
-    time: String(opts?.time ?? 1),
-    height: String(opts?.height ?? 900),
+    ...(opts?.time != null ? { time: String(opts.time) } : {}),
+    ...(opts?.height != null ? { height: String(opts.height) } : {}),
     ...(opts?.width != null ? { width: String(opts.width) } : {}),
     ...(opts?.fit_mode ? { fit_mode: opts.fit_mode } : {}),
     ...(opts?.format ? { format: opts.format } : {}),

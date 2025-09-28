@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { getRepos } from "../wiring/repos.js";
+import { config } from "../config/index.js";
 import { signPlaybackUrl } from "../services/mux/playbackSigner.js";
 
 export async function getFeed(_req: Request, res: Response) {
@@ -11,7 +12,7 @@ export async function getFeed(_req: Request, res: Response) {
     createdAt: v.createdAt,
     duration: v.durationSeconds ?? null,
     thumbnailUrl: v.muxPlaybackId
-      ? `https://image.mux.com/${v.muxPlaybackId}/thumbnail.jpg?time=1`
+      ? `https://image.mux.com/${v.muxPlaybackId}/thumbnail.jpg?time=${encodeURIComponent(String(config.THUMBNAIL.TIME_SECONDS ?? 1))}`
       : null
   }));
   return res.json({ items, nextCursor: null });

@@ -36,9 +36,9 @@ export function signThumbnailUrl(
   } = {},
   ttlSeconds = 120
 ) {
-  const { MUX_SIGNING_KEY_ID: kid, MUX_SIGNING_KEY_PEM: pem } = config;
+  const { MUX_SIGNING_KEY_ID: kid, MUX_SIGNING_KEY_PEM: pem, THUMBNAIL } = config;
 
-  const format = opts.format ?? "jpg";
+  const format = opts.format ?? THUMBNAIL.FORMAT ?? "jpg";
   const base = `https://image.mux.com/${playbackId}/thumbnail.${format}`;
 
   // 👉 Build claims with transforms embedded
@@ -46,17 +46,23 @@ export function signThumbnailUrl(
     sub: playbackId,
     aud: "t",
     // embed transforms here:
-    ...(typeof opts.time === "number" ? { time: Number(opts.time) } : {}),
-    ...(typeof opts.height === "number" ? { height: Number(opts.height) } : {}),
-    ...(typeof opts.width === "number" ? { width: Number(opts.width) } : {}),
-    ...(opts.fitMode ? { fit_mode: opts.fitMode } : { fit_mode: "smartcrop" }),
+    ...(typeof (opts.time ?? THUMBNAIL.TIME_SECONDS) === "number"
+      ? { time: Number(opts.time ?? THUMBNAIL.TIME_SECONDS) }
+      : {}),
+    ...(typeof (opts.height ?? THUMBNAIL.HEIGHT) === "number"
+      ? { height: Number(opts.height ?? THUMBNAIL.HEIGHT) }
+      : {}),
+    ...(typeof (opts.width ?? THUMBNAIL.WIDTH) === "number"
+      ? { width: Number(opts.width ?? THUMBNAIL.WIDTH) }
+      : {}),
+    ...(opts.fitMode ? { fit_mode: opts.fitMode } : { fit_mode: THUMBNAIL.FIT_MODE ?? "smartcrop" }),
     // format is already in the path; no need to add to claims
   };
 
   const token = (jwt as any).sign(
     claims,
     pem,
-    { algorithm: "RS256", keyid: kid, expiresIn: `${ttlSeconds}s` }
+    { algorithm: "RS256", keyid: kid, expiresIn: `${ttlSeconds || THUMBNAIL.TTL_SECONDS || 120}s` }
   );
 
   // 👉 Only *token* in the query; no time/height/etc. here

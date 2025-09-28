@@ -85,7 +85,7 @@ export default function Feed() {
                             const isPortrait = (window.innerHeight || 1) >= (window.innerWidth || 1);
                             const height = isPortrait ? vh : Math.round((window.innerWidth || 540) * 9 / 16);
                             const width = isPortrait ? Math.round(height * 9 / 16) : (window.innerWidth || 540);
-                            const p = await getSignedPosterUrl(pid, { time: 0.1, height, width, format: "png" });
+                            const p = await getSignedPosterUrl(pid, { height, width });
 
 
                             logToServer("poster.signed.received", { itemId: it.id, pid, url: p });

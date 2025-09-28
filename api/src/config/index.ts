@@ -46,4 +46,20 @@ export const config = {
   DB_USER: process.env.DB_USER ?? "",
   DB_PASSWORD: process.env.DB_PASSWORD ?? "",
   DB_NAME: process.env.DB_NAME ?? "mux",
+
+  // Thumbnail/poster defaults for Mux Image API (aud "t")
+  THUMBNAIL: {
+    // Default time offset into the video for the poster frame
+    TIME_SECONDS: Number(process.env.MUX_POSTER_TIME_SECONDS ?? 0.0),
+    // Default output height (server-side fallback; web may override per viewport)
+    HEIGHT: process.env.MUX_POSTER_HEIGHT ? Number(process.env.MUX_POSTER_HEIGHT) : undefined,
+    // Optional default width (rarely set; when omitted, Mux derives from aspect)
+    WIDTH: process.env.MUX_POSTER_WIDTH ? Number(process.env.MUX_POSTER_WIDTH) : undefined,
+    // smartcrop | pad | crop
+    FIT_MODE: (process.env.MUX_POSTER_FIT_MODE as "smartcrop" | "pad" | "crop") ?? "smartcrop",
+    // jpg | png
+    FORMAT: (process.env.MUX_POSTER_FORMAT as "jpg" | "png") ?? "jpg",
+    // Default TTL for signed thumbnail tokens
+    TTL_SECONDS: Number(process.env.MUX_POSTER_TTL_SECONDS ?? 600),
+  },
 };
