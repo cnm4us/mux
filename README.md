@@ -147,6 +147,25 @@ Rotate tokens/keys after sharing them anywhere.
 
 .gitignore already excludes .env, node_modules, build outputs, etc.
 
+Poster Config
+
+- Defaults live in `api/src/config/index.ts:50` under `config.THUMBNAIL` and are overrideable via env in `api/.env`.
+- Env keys (see examples in `api/.env.example:76`):
+  - `MUX_POSTER_TIME_SECONDS` – default time offset for poster frame (e.g., `0.0` for first frame).
+  - `MUX_POSTER_HEIGHT`, `MUX_POSTER_WIDTH` – optional default dimensions; usually omit and let the client pass viewport size.
+  - `MUX_POSTER_FIT_MODE` – `smartcrop | pad | crop` (defaults to `smartcrop`).
+  - `MUX_POSTER_FORMAT` – `png | jpg` (defaults to `png`).
+  - `MUX_POSTER_TTL_SECONDS` – token lifetime for signed image URLs.
+
+Trade‑offs & tips
+
+- First frame vs. black frame: `TIME_SECONDS=0.0` is seamless, but if some sources begin with black, bump slightly (e.g., `0.05`). You can still override per request with `?time=`.
+- Bandwidth vs. quality: `png` is crisp but heavier; switch to `jpg` for lighter payloads if mobile bandwidth is a concern.
+- Fit mode: `smartcrop` keeps the subject centered for vertical feeds; use `pad` to preserve full frame without cropping.
+- TTL: Long TTLs (e.g., 600s) are convenient in dev; consider shorter in prod.
+- Consistency: The feed’s unsigned `thumbnailUrl` also uses `TIME_SECONDS` for parity with signed posters.
+- Client behavior: The web app passes only viewport‑driven `height/width`; all policy decisions (time/fit/format/ttl) come from the API config.
+
 ## How this works
 
 ```mermaid
