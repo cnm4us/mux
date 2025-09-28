@@ -2,11 +2,26 @@
 import * as React from "react";
 import MuxPlayer from "@mux/mux-player-react";
 import Player from "@/components/Player";
-import { fetchFeed, getPlayUrl, type FeedItem } from "../hooks/useFeed";
+import { fetchFeed, getPlayUrl, type FeedItem, playbackIdFromUrl, getSignedPosterUrl } from "../hooks/useFeed";
 import MuxPlayerCard from "./MuxPlayerCard";
 import { useSoundPref } from "@/hooks/useSoundPref";
 
 let __PLAYER_SEQ = 0;
+
+function logToServer(event: string, data: any) {
+    try {
+        // redact Mux tokens in querystrings
+        if (data?.url) {
+            data.url = String(data.url).replace(/([?&]token=)[^&]+/i, "$1[redacted]");
+        }
+        fetch("/api/v1/_log", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ event, ts: Date.now(), ...data }),
+        }).catch(() => { });
+    } catch { }
+}
+
 function dbg(...args: any[]) {
     // @ts-ignore
     if (typeof window !== "undefined" && !window.__MUX_DEBUG) return;
@@ -22,6 +37,7 @@ export default function Feed() {
     const [cursor, setCursor] = React.useState<string | undefined>();
     const [active, setActive] = React.useState(0);
     const [urls, setUrls] = React.useState<Record<string, string>>({});
+    const [posters, setPosters] = React.useState<Record<string, string>>({});
     const [paused, setPaused] = React.useState<Record<string, boolean>>({});
     const [needsGesture, setNeedsGesture] = React.useState(false);
     const [hasUserGesture, setHasUserGesture] = React.useState(false);
@@ -52,13 +68,46 @@ export default function Feed() {
         [cur, nxt].forEach((it) => {
             if (!it || urls[it.id]) return;
             getPlayUrl(it.id)
-                .then((u) => {
+                .then(async (u) => {
                     setUrls((m) => ({ ...m, [it.id]: u }));
                     dbg("prefetched url:", it.id, tail(u));
+
+                    // Derive poster from the playback URL if feed lacks playbackId
+                    if (!posters[it.id]) {
+                        const pid = playbackIdFromUrl(u);
+                        if (!pid) {
+                            dbg("no playbackId derivable from url for", it.id);
+                            return;
+                        }
+                        try {
+                            // Compute portrait 9:16 crop sized to viewport height (cap to keep it light)
+                            const vh = Math.min(window.innerHeight || 900, 1280);
+                            const isPortrait = (window.innerHeight || 1) >= (window.innerWidth || 1);
+                            const height = isPortrait ? vh : Math.round((window.innerWidth || 540) * 9 / 16);
+                            const width = isPortrait ? Math.round(height * 9 / 16) : (window.innerWidth || 540);
+                            const p = await getSignedPosterUrl(pid, { time: 0.1, height, width, format: "png" });
+
+
+                            logToServer("poster.signed.received", { itemId: it.id, pid, url: p });
+                            const img = new Image();
+                            img.decoding = "async";
+                            img.onload = () => dbg("poster (signed) ok:", it.id, tail(p));
+                            img.onerror = (e) => dbg("poster (signed) FAILED:", it.id, p, e);
+                            img.src = p;
+                            setPosters((m) => ({ ...m, [it.id]: p }));
+                            logToServer("poster.prefetch.started", { itemId: it.id, url: p });
+                            dbg("poster (signed) scheduled:", it.id, tail(p));
+                        } catch (e) {
+                            dbg("poster signing failed:", it.id, e);
+                        }
+                    }
+
                 })
                 .catch(() => { });
         });
-    }, [active, items, urls]);
+    }, [active, items, urls, posters]);
+
+
 
     /* EFFECT 3: infinite pagination */
     React.useEffect(() => {
@@ -104,13 +153,31 @@ export default function Feed() {
         const el = playerRef.current as any;
         if (!el) return;
 
+        const handler = (evt: Event) => {
+            logToServer("player.media.event", {
+                type: evt.type,
+                currentSrc: el.currentSrc || null,
+                readyState: el.readyState,
+                paused: el.paused,
+            });
+        };
+        ["loadstart", "loadedmetadata", "waiting", "stalled", "playing", "pause", "ended", "error"].forEach(t =>
+            el.addEventListener(t, handler)
+        );
+
+
         if (!el.__muxId) {
             el.__muxId = ++__PLAYER_SEQ;
             dbg(`player #${el.__muxId} CREATED`);
         } else {
             dbg(`player #${el.__muxId} REUSED`);
         }
-        return () => { dbg(`player #${el?.__muxId ?? "?"} UNMOUNTED`); };
+        return () => {
+            ["loadstart", "loadedmetadata", "waiting", "stalled", "playing", "pause", "ended", "error"].forEach(t =>
+                el.removeEventListener(t, handler)
+            );
+            dbg(`player #${el?.__muxId ?? "?"} UNMOUNTED`);
+        };
     }, []);
 
     /* EFFECT 6: swap src & play on active change (respect per-card pause) */
@@ -122,6 +189,8 @@ export default function Feed() {
 
         const wantMuted = !soundOn;
         const isPausedByUser = !!paused[item.id];
+
+        const posterUrl = posters[item.id];
 
         const waitFor = (evt: string) =>
             new Promise<void>((res) => {
@@ -147,10 +216,20 @@ export default function Feed() {
             dbg(`player #${id} swap -> idx ${active} (${item.id}), url:${tail(url)}, wantMuted:${wantMuted}`);
 
 
+            // Only pause/swap when changing items
             if (el.src !== url) {
                 try { await el.pause?.(); } catch { }
+                // Set poster first to avoid black frame while the new src spins up
+                if (posterUrl && el.poster !== posterUrl) {
+                    dbg("player poster set:", items[active].id, tail(posterUrl));
+                    el.poster = posterUrl;
+                    logToServer("player.poster.set", { itemId: items[active].id, url: posterUrl });
+                } else {
+                    dbg("player poster unchanged or missing:", items[active].id, tail(posterUrl || "none"));
+                }
                 el.src = url;
                 dbg(`player #${id} src set`);
+                logToServer("player.src.set", { itemId: items[active].id, url });
             }
 
             el.muted = wantMuted;
@@ -204,7 +283,7 @@ export default function Feed() {
         };
 
         void run();
-    }, [active, items, urls, soundOn]);
+    }, [active, items, urls, soundOn, paused, posters]);
 
     /* Tap to enable sound (after playback is running) */
     const handleVideoTapForSound = () => {
@@ -344,19 +423,34 @@ export default function Feed() {
             </div>
 
             {/* Cards: overlays + counters; player itself is sticky above */}
-            {items.map((it, i) => (
-                <section className="card" key={it.id} data-idx={i}>
-                    <MuxPlayerCard
-                        active={i === active}
-                        title={it.title || "Untitled"}
-                        index={i + 1}
-                        total={items.length}
-                    />
-                </section>
-            ))}
+            {items.map((it, i) => {
+                const bg = posters[it.id] || "none";
+                dbg("card bg poster:", it.id, tail(bg));
+                return (
+                    <section
+                        className="card"
+                        key={it.id}
+                        data-idx={i}
+                        style={{
+                            background: bg !== "none"
+                                ? `center / cover no-repeat url("${bg}")`
+                                : "#000"
+                        }}
+                    >
+                        <MuxPlayerCard
+                            active={i === active}
+                            title={it.title || "Untitled"}
+                            index={i + 1}
+                            total={items.length}
+                        />
+                    </section>
+                );
+            })}
 
             {items.length === 0 && (
+                
                 <section className="card"><div>Loading feed…</div></section>
+                
             )}
         </div>
     );
