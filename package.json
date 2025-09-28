@@ -9,6 +9,8 @@
   "scripts": {
     "typecheck": "npm -w api run typecheck && npm -w web run typecheck",
     "build": "npm -w api run build && npm -w web run build",
+    "deploy:web": "npm -w web run build && sudo rsync -a --delete web/dist/ /var/www/mux-spa/",
+    "dev:all": "node tools/dev-all.js",
     "tree": "tsx tools/project-tree.ts --root=. --out=build/project-tree",
     "tree:md": "tsx tools/project-tree.ts --root=. --md",
     "tree:web": "tsx tools/project-tree.ts --root=. --out=build/project-tree --include=src/**,app/** --exclude=**/*.test.*,**/*.map",

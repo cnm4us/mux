@@ -50,11 +50,13 @@ chmod 600 /home/ubuntu/mux/api/keys/mux-signing-key.pem
 
 Run (dev)
 
+# All-in-one (starts both, prefixed output)
+npm run dev:all
+
+# Or run separately in two terminals
 # API (Express + TSX)
 npm -w api run dev
-# -> API listening on 127.0.0.1:3200 (ESM)
-
-# WEB (if/when you have the PWA scaffold)
+# WEB (Vite dev server)
 npm -w web run dev
 
 Health check: curl -s http://127.0.0.1:3200/api/health
@@ -107,8 +109,26 @@ npm run typecheck
 npm -w api run typecheck
 npm -w web run typecheck
 
-# build both (when you add web build)
+# build both apps (no deploy)
 npm run build
+
+# dev: start both dev servers with prefixed logs
+npm run dev:all
+
+# deploy web: build SPA and rsync to nginx root
+npm run deploy:web
+
+Workspace flags
+
+- Use `npm -w <name> run <script>` to run a script in a specific workspace from the repo root.
+- Examples: `npm -w api run dev`, `npm -w web run build`.
+
+Web cache-busting & deploy
+
+- Build injects a `BUILD_ID` and writes `/version.json`; the service worker uses it to update caches and prompt users.
+- Nginx serves `/index.html`, `/sw.js`, `/manifest.webmanifest`, `/version.json` as no-cache and long-caches `/assets/`.
+- To publish a new frontend build to `/var/www/mux-spa/`:
+  - `npm run deploy:web`
 
 
 API scripts (in api/package.json):
