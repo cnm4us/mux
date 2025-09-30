@@ -59,11 +59,62 @@ sw.addEventListener("fetch", (e) => {
   const isApi = url.pathname.startsWith("/api/");
   const isWrite = ["POST","PUT","PATCH","DELETE"].includes(e.request.method);
   const isStream = url.pathname.endsWith(".m3u8") || url.pathname.endsWith(".ts");
-  if (isApi || isWrite || isStream) return;
+  if (isApi || isWrite || isStream) return; // let network handle
 
+  // Always bypass cache for version.json so updates are detected promptly
+  if (url.pathname === "/version.json") {
+    e.respondWith((async () => {
+      try {
+        return await fetch(e.request, { cache: "no-store" });
+      } catch {
+        const cached = await caches.match(e.request);
+        return cached ?? Response.error();
+      }
+    })());
+    return;
+  }
+
+  // Network-first for navigations/documents so index.html updates are picked up
+  if (
+    e.request.mode === "navigate" ||
+    e.request.destination === "document" ||
+    url.pathname === "/" ||
+    url.pathname === "/index.html"
+  ) {
+    e.respondWith((async () => {
+      try {
+        const fresh = await fetch(e.request, { cache: "no-store" });
+        const c = await caches.open(cacheName());
+        c.put(e.request, fresh.clone());
+        return fresh;
+      } catch {
+        const cached = await caches.match(e.request);
+        return cached ?? Response.error();
+      }
+    })());
+    return;
+  }
+
+  // Cache-first for hashed static assets (Vite emits content-hashed URLs under /assets/)
+  if (url.pathname.startsWith("/assets/")) {
+    e.respondWith((async () => {
+      const cached = await caches.match(e.request);
+      if (cached) return cached;
+      try {
+        const fresh = await fetch(e.request);
+        const c = await caches.open(cacheName());
+        c.put(e.request, fresh.clone());
+        return fresh;
+      } catch {
+        return cached ?? Response.error();
+      }
+    })());
+    return;
+  }
+
+  // Default: network-first, fallback to cache when offline
   e.respondWith((async () => {
     const cached = await caches.match(e.request);
-    if (cached) return cached;
     try {
       const fresh = await fetch(e.request);
       const c = await caches.open(cacheName());

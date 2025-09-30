@@ -3,9 +3,14 @@ import * as React from 'react';
 // LocalStorage keys
 const SOUND_KEY = 'sound:on';
 const BUILD_LAST_KEY = 'build:lastSeen';
+const SESSION_KEY = 'session:started';
 
 export default function WelcomePopover() {
-  const [visible, setVisible] = React.useState<boolean>(() => localStorage.getItem(SOUND_KEY) !== '1');
+  const [visible, setVisible] = React.useState<boolean>(() => {
+    const sound = localStorage.getItem(SOUND_KEY) === '1';
+    const session = sessionStorage.getItem(SESSION_KEY) === '1';
+    return !(sound || session);
+  });
   const [buildId, setBuildId] = React.useState<string | null>(null);
   const [builtAt, setBuiltAt] = React.useState<string | null>(null);
   const [hasDiff, setHasDiff] = React.useState(false);
@@ -27,6 +32,13 @@ export default function WelcomePopover() {
     })();
   }, []);
 
+  // Hide if another part of the app already enabled sound in this session
+  React.useEffect(() => {
+    const on = () => setVisible(false);
+    window.addEventListener('mux:sound-on', on as any);
+    return () => window.removeEventListener('mux:sound-on', on as any);
+  }, []);
+
   if (!visible) return null;
 
   const start = async () => {
@@ -35,6 +47,7 @@ export default function WelcomePopover() {
       // Use the user gesture to enable sound across app
       try { window.dispatchEvent(new CustomEvent('mux:sound-on')); } catch {}
       localStorage.setItem(SOUND_KEY, '1');
+      try { sessionStorage.setItem(SESSION_KEY, '1'); } catch {}
       if (buildId) localStorage.setItem(BUILD_LAST_KEY, buildId);
       setVisible(false);
     } finally {
@@ -69,4 +82,3 @@ export default function WelcomePopover() {
     </div>
   );
 }
-

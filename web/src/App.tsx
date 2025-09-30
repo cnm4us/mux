@@ -13,7 +13,6 @@ import BottomTabBar from "@/components/ui/BottomTabBar";
 import LeftRail from "@/components/ui/LeftRail";
 
 import "./styles.css";
-import WelcomePopover from "@/components/WelcomePopover";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -89,7 +88,6 @@ export default function App() {
     return (
         <BrowserRouter>
             <AppShell />
-            <WelcomePopover />
         </BrowserRouter>
     );
 }

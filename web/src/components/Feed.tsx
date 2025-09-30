@@ -41,18 +41,111 @@ export default function Feed() {
     const [paused, setPaused] = React.useState<Record<string, boolean>>({});
     const [needsGesture, setNeedsGesture] = React.useState(false);
     const [hasUserGesture, setHasUserGesture] = React.useState(false);
+    const [hasStarted, setHasStarted] = React.useState(false);
+    // First-card poster gating: wait for media + stable container
+    const [firstMediaReady, setFirstMediaReady] = React.useState(false);
+    const [containerStable, setContainerStable] = React.useState(false);
+    const [firstPosterShown, setFirstPosterShown] = React.useState(false);
+    const [firstPrimed, setFirstPrimed] = React.useState(false);
 
     const containerRef = React.useRef<HTMLDivElement | null>(null);
+    const playerContainerRef = React.useRef<HTMLDivElement | null>(null);
     const playerRef = React.useRef<React.ComponentRef<typeof MuxPlayer> | null>(null);
 
     const { soundOn, setSoundOn } = useSoundPref();
 
     // Global start event from WelcomePopover
     React.useEffect(() => {
-        const on = () => setSoundOn(true);
+        const on = () => {
+            setSoundOn(true);
+            setHasUserGesture(true);
+            // Try to start playback with audio as part of the user gesture
+            const el = playerRef.current as any;
+            if (el) {
+                try { el.muted = false; el.play?.(); } catch {}
+            }
+            try { sessionStorage.setItem('session:started', '1'); } catch {}
+        };
         window.addEventListener('mux:sound-on', on as any);
         return () => window.removeEventListener('mux:sound-on', on as any);
     }, [setSoundOn]);
+
+    /* EFFECT: when poster for the active item becomes available, ensure player.poster is set (never for first tile) */
+    React.useEffect(() => {
+        const el = playerRef.current as any;
+        const item = items[active];
+        if (!el || !item) return;
+        if (active === 0) return; // never set poster on the first tile
+        const posterUrl = posters[item.id];
+        const isFirst = active === 0;
+        const allowPoster = isFirst ? false : hasStarted;
+        if (allowPoster && posterUrl && el.poster !== posterUrl) {
+            try {
+                dbg("player poster late-set:", item.id, tail(posterUrl));
+                el.poster = posterUrl;
+            } catch {}
+        }
+    }, [active, items, posters, hasStarted, firstMediaReady, containerStable, firstPosterShown]);
+
+    // Mark container stable for first card using ResizeObserver debounce
+    React.useEffect(() => {
+        const box = playerContainerRef.current;
+        if (!box) return;
+        // Only care about the first card
+        if (active !== 0) return;
+        let to: any;
+        const ro = new ResizeObserver(() => {
+            setContainerStable(false);
+            clearTimeout(to);
+            to = setTimeout(() => setContainerStable(true), 200);
+        });
+        try { ro.observe(box); } catch {}
+        // Kick off an initial settle timer
+        to = setTimeout(() => setContainerStable(true), 200);
+        return () => { clearTimeout(to); try { ro.disconnect(); } catch {} };
+    }, [active]);
+
+    // Once allowed, remember that the first poster has been shown so we don't flicker it off
+    React.useEffect(() => {
+        if (active !== 0) return;
+        if (firstPosterShown) return;
+        if (firstMediaReady && containerStable) setFirstPosterShown(true);
+    }, [active, firstMediaReady, containerStable, firstPosterShown]);
+
+    // Muted prime for the first tile only: paint an initial frame without user gesture
+    React.useEffect(() => {
+        if (active !== 0) return;
+        if (firstPrimed) return;
+        if (!firstMediaReady || !containerStable) return;
+        const el = playerRef.current as any;
+        if (!el) return;
+        let cancelled = false;
+        const waitForOnce = (evt: string) =>
+            new Promise<void>((res) => {
+                const on = () => { el.removeEventListener(evt, on as any); res(); };
+                el.addEventListener(evt, on as any, { once: true });
+            });
+        (async () => {
+            try {
+                el.muted = true;
+                const playP = el.play?.();
+                if (playP && typeof playP.then === 'function') {
+                    await Promise.race([
+                        playP.then(() => undefined),
+                        waitForOnce('playing'),
+                        new Promise<void>((r) => setTimeout(r, 350)),
+                    ]);
+                } else {
+                    await new Promise<void>((r) => setTimeout(r, 250));
+                }
+            } catch {}
+            finally {
+                try { await el.pause?.(); } catch {}
+                if (!cancelled) setFirstPrimed(true);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [active, firstMediaReady, containerStable, firstPrimed]);
 
     /* EFFECT 1: load initial feed */
     React.useEffect(() => {
@@ -167,6 +260,14 @@ export default function Feed() {
                 readyState: el.readyState,
                 paused: el.paused,
             });
+            if ((evt as any).type === 'playing') {
+                try { setHasStarted(true); } catch {}
+            }
+            if ((evt as any).type === 'loadedmetadata' || (evt as any).type === 'playbackready') {
+                if (active === 0) {
+                    try { setFirstMediaReady(true); } catch {}
+                }
+            }
         };
         ["loadstart", "loadedmetadata", "waiting", "stalled", "playing", "pause", "ended", "error"].forEach(t =>
             el.addEventListener(t, handler)
@@ -221,13 +322,14 @@ export default function Feed() {
         const run = async () => {
             const id = el.__muxId ?? "?";
             dbg(`player #${id} swap -> idx ${active} (${item.id}), url:${tail(url)}, wantMuted:${wantMuted}`);
-
+            const isFirst = active === 0;
+            const allowPoster = isFirst ? false : hasStarted;
 
             // Only pause/swap when changing items
             if (el.src !== url) {
                 try { await el.pause?.(); } catch { }
                 // Set poster first to avoid black frame while the new src spins up
-                if (posterUrl && el.poster !== posterUrl) {
+                if (allowPoster && posterUrl && el.poster !== posterUrl) {
                     dbg("player poster set:", items[active].id, tail(posterUrl));
                     el.poster = posterUrl;
                     logToServer("player.poster.set", { itemId: items[active].id, url: posterUrl });
@@ -244,6 +346,13 @@ export default function Feed() {
             dbg(`player #${id} waiting ready…`);
             await Promise.race([waitFor("playbackready"), waitFor("loadedmetadata")]);
             dbg(`player #${id} ready`);
+
+            // Do not auto-play until the user has started this session
+            if (!soundOn || !hasUserGesture) {
+                try { await el.pause?.(); } catch {}
+                dbg(`player #${id} holding playback until Start (soundOn=${soundOn}, hasUserGesture=${hasUserGesture})`);
+                return;
+            }
 
             // If user paused this specific card, don't auto-play it.
             if (isPausedByUser) {
@@ -346,18 +455,27 @@ export default function Feed() {
                     pointerEvents: "auto",
                     zIndex: 1,
                 }}
+                ref={playerContainerRef}
             >
                 <Player
                     ref={playerRef}
                     className="video-el"
                     streamType="on-demand"
-                    preload="metadata"
-                    autoPlay
+                    preload={active === 0 ? "auto" : "metadata"}
+                    autoPlay={false}
                     muted={!soundOn}
                     playsInline
                     nohotkeys
+                    poster={active === 0 ? undefined : (hasStarted ? (posters[items[active]?.id || ""] || undefined) : undefined)}
                     /* Disable pointer to avoid fighting built-in center play button */
-                    style={{ width: "100%", height: "100%", pointerEvents: "none" }}
+                    style={{
+                        width: "100%",
+                        // keep intrinsic video size, avoid stretching poster
+                        aspectRatio: "9 / 16",
+                        maxHeight: "100vh",
+                        pointerEvents: "none",
+                        backgroundColor: "#000"
+                    }}
                 />
 
                 {/* Full-screen invisible hit area over the player (click + keyboard) */}
@@ -431,21 +549,16 @@ export default function Feed() {
 
             {/* Cards: overlays + counters; player itself is sticky above */}
             {items.map((it, i) => {
-                const bg = posters[it.id] || "none";
-                dbg("card bg poster:", it.id, tail(bg));
+                const isActive = i === active;
                 return (
                     <section
                         className="card"
                         key={it.id}
                         data-idx={i}
-                        style={{
-                            background: bg !== "none"
-                                ? `center / cover no-repeat url("${bg}")`
-                                : "#000"
-                        }}
+                        style={{ background: "#000" }}
                     >
                         <MuxPlayerCard
-                            active={i === active}
+                            active={isActive}
                             title={it.title || "Untitled"}
                             index={i + 1}
                             total={items.length}

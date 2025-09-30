@@ -6,7 +6,13 @@ import App from "./App";
 // Register service worker for PWA
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-        navigator.serviceWorker.register("/sw.js").catch(() => { });
+        navigator.serviceWorker.register("/sw.js", { updateViaCache: 'none' }).catch(() => { });
+        // Proactively ask SW to check for updates when possible
+        navigator.serviceWorker.ready.then(() => {
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: "CHECK_VERSION" });
+            }
+        }).catch(() => { });
     });
 
     // Listen for SW messages about version updates
@@ -26,6 +32,16 @@ if ("serviceWorker" in navigator) {
             navigator.serviceWorker.controller?.postMessage({ type: "CHECK_VERSION" });
         }
     });
+
+    // Also check on window focus (covers iOS Safari cases where visibility doesn't change)
+    window.addEventListener("focus", () => {
+        navigator.serviceWorker.controller?.postMessage({ type: "CHECK_VERSION" });
+    });
+
+    // Optional: periodic checks during long sessions
+    setInterval(() => {
+        navigator.serviceWorker.controller?.postMessage({ type: "CHECK_VERSION" });
+    }, 60_000);
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
