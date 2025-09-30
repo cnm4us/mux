@@ -47,6 +47,13 @@ export default function Feed() {
 
     const { soundOn, setSoundOn } = useSoundPref();
 
+    // Global start event from WelcomePopover
+    React.useEffect(() => {
+        const on = () => setSoundOn(true);
+        window.addEventListener('mux:sound-on', on as any);
+        return () => window.removeEventListener('mux:sound-on', on as any);
+    }, [setSoundOn]);
+
     /* EFFECT 1: load initial feed */
     React.useEffect(() => {
         let mounted = true;
