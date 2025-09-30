@@ -38,8 +38,10 @@ export default function Feed() {
     const [active, setActive] = React.useState(0);
     const [urls, setUrls] = React.useState<Record<string, string>>({});
     const [posters, setPosters] = React.useState<Record<string, string>>({});
-    const [paused, setPaused] = React.useState<Record<string, boolean>>({});
-    const [needsGesture, setNeedsGesture] = React.useState(false);
+    // Track only if the user explicitly paused; autoplay transitions shouldn't show play icon
+    const [userPaused, setUserPaused] = React.useState(false);
+    // No per-item paused map; pause applies to the sticky player only
+    // and scrolling resumes autoplay with sound.
     const [hasUserGesture, setHasUserGesture] = React.useState(false);
     const [hasStarted, setHasStarted] = React.useState(false);
     // First-card poster gating: wait for media + stable container
@@ -54,21 +56,16 @@ export default function Feed() {
 
     const { soundOn, setSoundOn } = useSoundPref();
 
-    // Global start event from WelcomePopover
+    // Initialize session-based resume: if this tab session has already started
     React.useEffect(() => {
-        const on = () => {
-            setSoundOn(true);
-            setHasUserGesture(true);
-            // Try to start playback with audio as part of the user gesture
-            const el = playerRef.current as any;
-            if (el) {
-                try { el.muted = false; el.play?.(); } catch {}
+        try {
+            if (sessionStorage.getItem('session:started') === '1') {
+                setHasUserGesture(true);
             }
-            try { sessionStorage.setItem('session:started', '1'); } catch {}
-        };
-        window.addEventListener('mux:sound-on', on as any);
-        return () => window.removeEventListener('mux:sound-on', on as any);
-    }, [setSoundOn]);
+        } catch {}
+    }, []);
+
+    // No external start event; first user tap sets gesture.
 
     /* EFFECT: when poster for the active item becomes available, ensure player.poster is set (never for first tile) */
     React.useEffect(() => {
@@ -141,6 +138,7 @@ export default function Feed() {
             } catch {}
             finally {
                 try { await el.pause?.(); } catch {}
+                try { el.muted = false; } catch {}
                 if (!cancelled) setFirstPrimed(true);
             }
         })();
@@ -268,6 +266,7 @@ export default function Feed() {
                     try { setFirstMediaReady(true); } catch {}
                 }
             }
+            // Keep userPaused only for explicit user actions; do not override here
         };
         ["loadstart", "loadedmetadata", "waiting", "stalled", "playing", "pause", "ended", "error"].forEach(t =>
             el.addEventListener(t, handler)
@@ -288,15 +287,12 @@ export default function Feed() {
         };
     }, []);
 
-    /* EFFECT 6: swap src & play on active change (respect per-card pause) */
+    /* EFFECT 6: swap src & play on active change */
     React.useEffect(() => {
         const el = playerRef.current as any;
         const item = items[active];
         const url = urls[item?.id ?? ""];
         if (!el || !item || !url) return;
-
-        const wantMuted = !soundOn;
-        const isPausedByUser = !!paused[item.id];
 
         const posterUrl = posters[item.id];
 
@@ -306,22 +302,9 @@ export default function Feed() {
                 el.addEventListener(evt, on as any, { once: true });
             });
 
-        const waitForUserGesture = () =>
-            new Promise<void>((res) => {
-                const handler = () => { cleanup(); res(); };
-                const cleanup = () => {
-                    window.removeEventListener("pointerdown", handler, true);
-                    window.removeEventListener("touchstart", handler, true);
-                    window.removeEventListener("click", handler, true);
-                };
-                window.addEventListener("pointerdown", handler, true);
-                window.addEventListener("touchstart", handler, true);
-                window.addEventListener("click", handler, true);
-            });
-
         const run = async () => {
             const id = el.__muxId ?? "?";
-            dbg(`player #${id} swap -> idx ${active} (${item.id}), url:${tail(url)}, wantMuted:${wantMuted}`);
+            dbg(`player #${id} swap -> idx ${active} (${item.id}), url:${tail(url)}`);
             const isFirst = active === 0;
             const allowPoster = isFirst ? false : hasStarted;
 
@@ -341,104 +324,44 @@ export default function Feed() {
                 logToServer("player.src.set", { itemId: items[active].id, url });
             }
 
-            el.muted = wantMuted;
+            // We'll enforce unmuted just before play when allowed
 
             dbg(`player #${id} waiting ready…`);
             await Promise.race([waitFor("playbackready"), waitFor("loadedmetadata")]);
             dbg(`player #${id} ready`);
 
-            // Do not auto-play until the user has started this session
-            if (!soundOn || !hasUserGesture) {
-                try { await el.pause?.(); } catch {}
-                dbg(`player #${id} holding playback until Start (soundOn=${soundOn}, hasUserGesture=${hasUserGesture})`);
-                return;
-            }
-
-            // If user paused this specific card, don't auto-play it.
-            if (isPausedByUser) {
-                dbg(`player #${id} respecting pausedByUser on ${item.id}`);
-                return;
-            }
-
-            try {
-                setNeedsGesture(false);
-                dbg(`player #${id} play() attempt (muted:${el.muted})`);
-                await el.play();
-                dbg(`player #${id} play() OK`);
-                return;
-            } catch (err) {
-                dbg(`player #${id} play() FAILED first`, err);
-            }
-
-            if (!wantMuted) {
+            // Autoplay with sound after the user has provided a gesture
+            if (hasUserGesture) {
                 try {
-                    await new Promise(r => setTimeout(r, 60));
-                    dbg(`player #${id} retry play() (muted:${el.muted})`);
+                    el.muted = false;
                     await el.play();
-                    dbg(`player #${id} retry OK`);
-                    return;
-                } catch (err2) {
-                    dbg(`player #${id} retry FAILED`, err2);
+                    dbg(`player #${id} autoplay with sound OK`);
+                    try { setUserPaused(false); } catch {}
+                } catch (err) {
+                    dbg(`player #${id} autoplay failed`, err);
                 }
-            }
-
-            // iOS wants a gesture — arm one-shot listener and show overlay
-            setNeedsGesture(true);
-            dbg(`player #${id} awaiting user gesture to start…`);
-            await waitForUserGesture();
-            setNeedsGesture(false);
-
-            el.muted = true; // start muted to satisfy policy; Sound flow can unmute later
-            try {
-                dbg(`player #${id} gesture play()`);
-                await el.play();
-                dbg(`player #${id} gesture play OK`);
-            } catch (e3) {
-                dbg(`player #${id} gesture play FAILED`, e3);
+            } else {
+                dbg(`player #${id} holding (no gesture yet)`);
             }
         };
 
         void run();
-    }, [active, items, urls, soundOn, paused, posters]);
+    }, [active, items, urls, hasUserGesture, posters]);
 
-    /* Tap to enable sound (after playback is running) */
-    const handleVideoTapForSound = () => {
-        const el = playerRef.current as any;
-        setSoundOn(true);
-        dbg(`gesture: enable sound → player #${el?.__muxId ?? "?"}`);
-        if (el) {
-            el.muted = false;
-            el.play?.()
-                .then(() => dbg(`player #${el.__muxId} play() after tap OK`))
-                .catch((e: any) => dbg(`player #${el.__muxId} play() after tap FAILED`, e));
-        }
-    };
-
-    /* Tap to toggle pause ONLY for the current card */
+    // Toggle pause/play on overlay tap (after first gesture)
     const togglePauseActive = async () => {
         const el = playerRef.current as any;
-        const item = items[active];
-        if (!el || !item) return;
-        if (el.paused) {
-            try {
-                await el.play();            // try with current mute state
-                setPaused((m) => ({ ...m, [item.id]: false }));
-                return;
-            } catch {
-                try {
-                    el.muted = true;          // policy-safe fallback
-                    await el.play();
-                    setPaused((m) => ({ ...m, [item.id]: false }));
-                    return;
-                } catch {
-                    setNeedsGesture(true);    // next tap will satisfy
-                    return;
-                }
+        if (!el) return;
+        try {
+            if (el.paused) {
+                el.muted = false;
+                await el.play();
+                setUserPaused(false);
+            } else {
+                await el.pause();
+                setUserPaused(true);
             }
-        } else {
-            setPaused((m) => ({ ...m, [item.id]: true }));
-            try { await el.pause(); } catch { }
-        }
+        } catch {}
     };
 
     return (
@@ -463,7 +386,7 @@ export default function Feed() {
                     streamType="on-demand"
                     preload={active === 0 ? "auto" : "metadata"}
                     autoPlay={false}
-                    muted={!soundOn}
+                    muted={false}
                     playsInline
                     nohotkeys
                     poster={active === 0 ? undefined : (hasStarted ? (posters[items[active]?.id || ""] || undefined) : undefined)}
@@ -483,7 +406,7 @@ export default function Feed() {
                     role="button"
                     tabIndex={0}
                     aria-label="Play or pause"
-                    aria-pressed={!!paused[items[active]?.id]}
+                    aria-pressed={userPaused}
                     onKeyDown={(e) => {
                         if (e.key === " " || e.key === "Enter") {
                             e.preventDefault();
@@ -496,11 +419,11 @@ export default function Feed() {
                         // First ever tap: enable sound and start playback with audio
                         if (!hasUserGesture) {
                             setHasUserGesture(true);
-                            setNeedsGesture(false);
-                            setSoundOn(true);
+                            try { sessionStorage.setItem('session:started', '1'); } catch {}
                             try {
                                 el.muted = false;
                                 await el.play();
+                                setUserPaused(false);
                             } catch {
                                 // Fallback: try muted once, then user can tap again
                                 try { el.muted = true; await el.play(); } catch { }
@@ -520,7 +443,7 @@ export default function Feed() {
                     }}
                 />
 
-                {/* HUD: big translucent play/pause icon (non-interactive) */}
+                {/* HUD: big translucent play icon only (non-interactive) */}
                 <div
                     style={{
                         position: "absolute",
@@ -533,16 +456,10 @@ export default function Feed() {
                     }}
                 >
                     {(() => {
-                        const curId = items[active]?.id;
-                        const showPaused = !hasUserGesture || !!paused[curId];
-                        return (
-                            <div
-                                className={`hud-indicator ${showPaused ? "is-paused" : "is-playing"}`}
-                                aria-hidden="true"
-                            >
-                                {showPaused ? "▶" : "⏸"}
-                            </div>
-                        );
+                        const showPlay = (!hasUserGesture) || userPaused;
+                        return showPlay ? (
+                            <div className={`hud-indicator is-paused`} aria-hidden="true">▶</div>
+                        ) : null;
                     })()}
                 </div>
             </div>
