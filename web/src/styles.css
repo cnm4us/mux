@@ -41,16 +41,18 @@ body {
 /* --- feed & cards --- */
 .feed {
     height: 100vh;
+    height: 100dvh;
     overflow-y: auto;
     scroll-snap-type: y mandatory;
 }
 
 .card {
     height: 100vh;
+    height: 100dvh;
     position: relative;
     scroll-snap-align: start;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     width: 100%;
     /* ensure full width */
@@ -117,6 +119,13 @@ mux-player,
     height: auto;
     display: block;
     background: #000;
+}
+
+/* Ensure media within mux-player fits and pins to top */
+.video-el,
+mux-player {
+    --media-object-fit: contain;
+    --media-object-position: top center;
 }
 
 .badge {

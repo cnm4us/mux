@@ -376,9 +376,9 @@ export default function Feed() {
                 style={{
                     position: "sticky",
                     top: 0,
-                    height: "100vh",
+                    height: "100dvh",
                     display: "flex",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     justifyContent: "center",
                     pointerEvents: "auto",
                     zIndex: 1,
