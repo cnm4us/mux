@@ -49,6 +49,10 @@ export default function Feed() {
     const [containerStable, setContainerStable] = React.useState(false);
     const [firstPosterShown, setFirstPosterShown] = React.useState(false);
     const [firstPrimed, setFirstPrimed] = React.useState(false);
+    // Minimal progress indicator state
+    const [duration, setDuration] = React.useState(0);
+    const [currentTime, setCurrentTime] = React.useState(0);
+    const [bufferedEnd, setBufferedEnd] = React.useState(0);
 
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const playerContainerRef = React.useRef<HTMLDivElement | null>(null);
@@ -113,7 +117,8 @@ export default function Feed() {
     React.useEffect(() => {
         if (active !== 0) return;
         if (firstPrimed) return;
-        if (!firstMediaReady || !containerStable) return;
+        // Proceed once media is ready; do not require containerStable to avoid iOS dvh toolbar churn
+        if (!firstMediaReady) return;
         // If the session already has a user gesture, skip priming to allow autoplay with sound
         if (hasUserGesture) return;
         const el = playerRef.current as any;
@@ -129,13 +134,15 @@ export default function Feed() {
                 el.muted = true;
                 const playP = el.play?.();
                 if (playP && typeof playP.then === 'function') {
+                    // Wait for a frame to be decodable/paintable; allow a longer window on iOS/HLS
                     await Promise.race([
-                        playP.then(() => undefined),
+                        waitForOnce('loadeddata'),
+                        waitForOnce('canplay'),
                         waitForOnce('playing'),
-                        new Promise<void>((r) => setTimeout(r, 350)),
+                        new Promise<void>((r) => setTimeout(r, 1200)),
                     ]);
                 } else {
-                    await new Promise<void>((r) => setTimeout(r, 250));
+                    await new Promise<void>((r) => setTimeout(r, 400));
                 }
             } catch {}
             finally {
@@ -269,9 +276,30 @@ export default function Feed() {
                     try { setFirstMediaReady(true); } catch {}
                 }
             }
-            // Keep userPaused only for explicit user actions; do not override here
+            // Update progress metrics
+            try {
+                if ((evt as any).type === 'loadedmetadata' || (evt as any).type === 'durationchange') {
+                    setDuration(Number.isFinite(el.duration) ? el.duration : 0);
+                }
+                if ((evt as any).type === 'timeupdate' || (evt as any).type === 'playing') {
+                    setCurrentTime(Number.isFinite(el.currentTime) ? el.currentTime : 0);
+                }
+                if ((evt as any).type === 'progress' || (evt as any).type === 'loadedmetadata' || (evt as any).type === 'playing') {
+                    const br: TimeRanges = el.buffered;
+                    let end = 0;
+                    try {
+                        const t = el.currentTime || 0;
+                        for (let i = 0; i < br.length; i++) {
+                            const s = br.start(i), e = br.end(i);
+                            if (t >= s && t <= e) { end = e; break; }
+                            end = Math.max(end, e);
+                        }
+                    } catch {}
+                    setBufferedEnd(Number.isFinite(end) ? end : 0);
+                }
+            } catch {}
         };
-        ["loadstart", "loadedmetadata", "waiting", "stalled", "playing", "pause", "ended", "error"].forEach(t =>
+        ["loadstart", "loadedmetadata", "durationchange", "timeupdate", "progress", "waiting", "stalled", "playing", "pause", "ended", "error"].forEach(t =>
             el.addEventListener(t, handler)
         );
 
@@ -322,6 +350,8 @@ export default function Feed() {
                 } else {
                     dbg("player poster unchanged or missing:", items[active].id, tail(posterUrl || "none"));
                 }
+                // Reset progress metrics for the new source
+                try { setDuration(0); setCurrentTime(0); setBufferedEnd(0); } catch {}
                 el.src = url;
                 dbg(`player #${id} src set`);
                 logToServer("player.src.set", { itemId: items[active].id, url });
@@ -400,7 +430,7 @@ export default function Feed() {
                         width: "100%",
                         // keep intrinsic video size, avoid stretching poster
                         aspectRatio: "9 / 16",
-                        maxHeight: "100vh",
+                        maxHeight: "100dvh",
                         pointerEvents: "none",
                         backgroundColor: "#000"
                     }}
@@ -467,6 +497,19 @@ export default function Feed() {
                         ) : null;
                     })()}
                 </div>
+
+                {/* Minimal progress indicator (non-interactive, overlay inside sticky container) */}
+                {(() => {
+                    const show = hasUserGesture && !userPaused && duration > 0;
+                    const played = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0;
+                    const buffered = duration > 0 ? Math.min(1, Math.max(played, bufferedEnd / duration)) : 0;
+                    return show ? (
+                        <div className="progress-mini" aria-hidden="true">
+                            <div className="progress-mini-buffered" style={{ width: `${Math.round(buffered * 100)}%` }} />
+                            <div className="progress-mini-played" style={{ width: `${Math.round(played * 100)}%` }} />
+                        </div>
+                    ) : null;
+                })()}
             </div>
 
             {/* Cards: overlays + counters; player itself is sticky above */}
