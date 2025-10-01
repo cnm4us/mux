@@ -260,6 +260,7 @@ export default function Feed() {
             });
             if ((evt as any).type === 'playing') {
                 try { setHasStarted(true); } catch {}
+                try { setUserPaused(false); } catch {}
             }
             if ((evt as any).type === 'loadedmetadata' || (evt as any).type === 'playbackready') {
                 if (active === 0) {
@@ -332,13 +333,15 @@ export default function Feed() {
 
             // Autoplay with sound after the user has provided a gesture
             if (hasUserGesture) {
+                // Consider scroll as resume: hide HUD immediately
+                try { setUserPaused(false); } catch {}
                 try {
                     el.muted = false;
                     await el.play();
                     dbg(`player #${id} autoplay with sound OK`);
-                    try { setUserPaused(false); } catch {}
                 } catch (err) {
                     dbg(`player #${id} autoplay failed`, err);
+                    try { setUserPaused(true); } catch {}
                 }
             } else {
                 dbg(`player #${id} holding (no gesture yet)`);
