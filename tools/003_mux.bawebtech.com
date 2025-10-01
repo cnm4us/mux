@@ -50,77 +50,11 @@ server {
     proxy_send_timeout 300;
   }
 
-
-  # SPA entry — always serve fresh HTML
-  location = /index.html {
-    root /var/www/mux-spa;
-    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-    add_header Pragma "no-cache" always;
-    add_header Expires "0" always;
-    try_files /index.html =404;
-  }
-
-  # History fallback: route URLs to index.html, keep it non-cacheable
-  location / {
-    root /var/www/mux-spa;
-    try_files $uri $uri/ /index.html;
-    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-    add_header Pragma "no-cache" always;
-    add_header Expires "0" always;
-  }
-
-  # Always fetch the latest service worker script
-  location = /sw.js {
-    root /var/www/mux-spa;
-    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-    add_header Pragma "no-cache" always;
-    add_header Expires "0" always;
-    try_files /sw.js =404;
-  }
-
-  # Version manifest used by the app to detect new builds
-  location = /version.json {
-    root /var/www/mux-spa;
-    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-    add_header Pragma "no-cache" always;
-    add_header Expires "0" always;
-    try_files /version.json =404;
-  }
-
-  # PWA manifest — always revalidate
-  location ~* ^/(manifest\.webmanifest|manifest\.json)$ {
-    root /var/www/mux-spa;
-    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-    add_header Pragma "no-cache" always;
-    add_header Expires "0" always;
-    try_files $uri =404;
-  }
-
-  # Long-cache only for Vite's hashed assets under /assets/
-  # Example: /assets/index-PL6-fJ2f.js → safe to cache long with immutable
-  location ^~ /assets/ {
-    root /var/www/mux-spa;
-    add_header Cache-Control "public, max-age=31536000, immutable" always;
-    expires 1y;
-    try_files $uri =404;
-  }
-
-  # Favicons and app icons (not hashed) — keep short/no cache to reflect updates quickly
-  location = /favicon.ico {
-    root /var/www/mux-spa;
-    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-    add_header Pragma "no-cache" always;
-    add_header Expires "0" always;
-    try_files /favicon.ico =404;
-  }
-
-  location ^~ /icons/ {
-    root /var/www/mux-spa;
-    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-    add_header Pragma "no-cache" always;
-    add_header Expires "0" always;
-    try_files $uri =404;
-  }
+  # -------------------------
+  # SPA build include (swap this symlink to change builds)
+  # -------------------------
+  # Recommended target on server: /etc/nginx/mux/build.current.conf
+  include /etc/nginx/mux/build.current.conf;
 }
 
 # Helper map for WebSocket Connection header (place once in http{} context)
