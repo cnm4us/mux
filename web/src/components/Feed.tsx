@@ -114,6 +114,8 @@ export default function Feed() {
         if (active !== 0) return;
         if (firstPrimed) return;
         if (!firstMediaReady || !containerStable) return;
+        // If the session already has a user gesture, skip priming to allow autoplay with sound
+        if (hasUserGesture) return;
         const el = playerRef.current as any;
         if (!el) return;
         let cancelled = false;
@@ -143,7 +145,7 @@ export default function Feed() {
             }
         })();
         return () => { cancelled = true; };
-    }, [active, firstMediaReady, containerStable, firstPrimed]);
+    }, [active, firstMediaReady, containerStable, firstPrimed, hasUserGesture]);
 
     /* EFFECT 1: load initial feed */
     React.useEffect(() => {
