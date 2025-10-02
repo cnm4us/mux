@@ -1,5 +1,7 @@
 // Feed.tsx
 import * as React from "react";
+// Register Media Chrome custom elements (media-controller, media-progress-range)
+import 'media-chrome';
 import MuxPlayer from "@mux/mux-player-react";
 import Player from "@/components/Player";
 import { fetchFeed, getPlayUrl, type FeedItem, playbackIdFromUrl, getSignedPosterUrl } from "../hooks/useFeed";
@@ -415,26 +417,32 @@ export default function Feed() {
                 }}
                 ref={playerContainerRef}
             >
-                <Player
-                    ref={playerRef}
-                    className="video-el"
-                    streamType="on-demand"
-                    preload={active === 0 ? "auto" : "metadata"}
-                    autoPlay={false}
-                    muted={false}
-                    playsInline
-                    nohotkeys
-                    poster={active === 0 ? undefined : (hasStarted ? (posters[items[active]?.id || ""] || undefined) : undefined)}
-                    /* Disable pointer to avoid fighting built-in center play button */
-                    style={{
-                        width: "100%",
-                        // keep intrinsic video size, avoid stretching poster
-                        aspectRatio: "9 / 16",
-                        maxHeight: "100dvh",
-                        pointerEvents: "none",
-                        backgroundColor: "#000"
-                    }}
-                />
+                {/* Media controller wraps the player and enables scrubbable progress */}
+                <media-controller id="mux-ctrl" style={{ width: '100%', height: '100%', position: 'relative' }}>
+                    <Player
+                        ref={playerRef}
+                        slot="media"
+                        className="video-el"
+                        streamType="on-demand"
+                        preload={active === 0 ? "auto" : "metadata"}
+                        autoPlay={false}
+                        muted={false}
+                        playsInline
+                        nohotkeys
+                        poster={active === 0 ? undefined : (hasStarted ? (posters[items[active]?.id || ""] || undefined) : undefined)}
+                        /* Disable pointer to avoid fighting built-in center play button */
+                        style={{
+                            width: "100%",
+                            // keep intrinsic video size, avoid stretching poster
+                            aspectRatio: "9 / 16",
+                            maxHeight: "100dvh",
+                            pointerEvents: "none",
+                            backgroundColor: "#000"
+                        }}
+                    />
+
+                    {/* (Progress moved outside controller to sit above overlay) */}
+                </media-controller>
 
                 {/* Full-screen invisible hit area over the player (click + keyboard) */}
                 <div
@@ -498,18 +506,24 @@ export default function Feed() {
                     })()}
                 </div>
 
-                {/* Minimal progress indicator (non-interactive, overlay inside sticky container) */}
-                {(() => {
-                    const show = hasUserGesture && !userPaused && duration > 0;
-                    const played = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0;
-                    const buffered = duration > 0 ? Math.min(1, Math.max(played, bufferedEnd / duration)) : 0;
-                    return show ? (
-                        <div className="progress-mini" aria-hidden="true">
-                            <div className="progress-mini-buffered" style={{ width: `${Math.round(buffered * 100)}%` }} />
-                            <div className="progress-mini-played" style={{ width: `${Math.round(played * 100)}%` }} />
-                        </div>
-                    ) : null;
-                })()}
+                {/* Scrubbable progress bar (interactive) */}
+                {/* Scrubbable time range outside controller so it sits above overlay; bind via mediacontroller */}
+                <media-time-range
+                    aria-label="Seek"
+                    mediacontroller="mux-ctrl"
+                    style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        bottom: `calc(56px + env(safe-area-inset-bottom) + 0px)`,
+                        zIndex: 10,
+                        pointerEvents: 'auto',
+                        height: 28,
+                        marginLeft: 12,
+                        marginRight: 12,
+                        width: 'auto'
+                    }}
+                />
             </div>
 
             {/* Cards: overlays + counters; player itself is sticky above */}

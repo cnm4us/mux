@@ -129,36 +129,23 @@ mux-player {
 }
 
 /* Minimal progress indicator (non-interactive) */
-.progress-mini {
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.18);
-    border-radius: 999px;
-    pointer-events: none;
-    z-index: 5;
-    /* Float just above the bottom nav and safe area */
-    bottom: calc(56px + env(safe-area-inset-bottom) + 10px);
-}
-.progress-mini-buffered {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 0%;
-    background: rgba(255, 255, 255, 0.32);
-    border-radius: inherit;
-}
-.progress-mini-played {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 0%;
-    background: #fff;
-    opacity: 0.95;
-    border-radius: inherit;
+/* Media Chrome progress theme (scrubbable) */
+media-progress-range,
+media-time-range {
+    display: block;
+    height: 28px; /* explicit host height to ensure visible hit area */
+    --media-range-track-height: 2px; /* thinner visible line */
+    /* Colors: track 10% • buffered 20% • progress 40% • thumb 40% */
+    --media-primary-color: rgba(255,255,255,0.4); /* base color for thumb */
+    --media-secondary-color: transparent; /* not used */
+    --media-range-thumb-size: 16px;
+    --media-range-thumb-background: rgba(255,255,255,0.4);
+    --media-range-thumb-border: none; /* remove handle outline */
+    --media-range-bar-fill-background: rgba(255,255,255,0.4); /* progress 40% */
+    --media-range-track-background: rgba(255,255,255,0.10);   /* full length 10% */
+    --media-range-bar-buffered-background: rgba(255,255,255,0.20); /* buffered 20% */
+    --media-focus-outline: none; /* remove focus outline */
+    touch-action: none;
 }
 
 .badge {
