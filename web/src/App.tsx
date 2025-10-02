@@ -11,6 +11,7 @@ import Uploader from "@/components/Uploader";
 //   web/src/components/ui/LeftRail.tsx
 import BottomTabBar from "@/components/ui/BottomTabBar";
 import LeftRail from "@/components/ui/LeftRail";
+import MenuDrawer from "@/components/ui/MenuDrawer";
 
 import "./styles.css";
 import { AuthProvider } from "@/context/AuthContext";
@@ -71,6 +72,7 @@ function AppShell() {
 
     return (
         <>
+            <MenuDrawer />
             <LeftRail />
             <main className="app-main">
                 <Routes>
