@@ -13,6 +13,10 @@ import BottomTabBar from "@/components/ui/BottomTabBar";
 import LeftRail from "@/components/ui/LeftRail";
 
 import "./styles.css";
+import { AuthProvider } from "@/context/AuthContext";
+import LoginPage from "@/pages/Login";
+import RegisterPage from "@/pages/Register";
+import LogoutPage from "@/pages/Logout";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -72,6 +76,9 @@ function AppShell() {
                 <Routes>
                     <Route path="/" element={<Feed />} />
                     <Route path="/upload" element={<Uploader />} />
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/register" element={<RegisterPage />} />
+                    <Route path="/logout" element={<LogoutPage />} />
                     <Route path="/inbox" element={<div style={{ padding: 16 }}>Inbox (coming soon)</div>} />
                     <Route path="/profile" element={<div style={{ padding: 16 }}>Profile (coming soon)</div>} />
                     <Route path="/settings" element={<div style={{ padding: 16 }}>Settings (coming soon)</div>} />
@@ -88,7 +95,9 @@ export default function App() {
     const base = (import.meta as any).env.BASE_URL || "/";
     return (
         <BrowserRouter basename={base}>
-            <AppShell />
+            <AuthProvider>
+                <AppShell />
+            </AuthProvider>
         </BrowserRouter>
     );
 }

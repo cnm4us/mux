@@ -7,6 +7,7 @@ const items = [
     { to: "/inbox", label: "Inbox" },
     { to: "/profile", label: "Profile" },
     { to: "/settings", label: "Settings" },
+    { to: "/logout", label: "Logout" },
 ];
 
 export default function LeftRail() {
