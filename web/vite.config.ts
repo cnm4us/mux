@@ -4,6 +4,8 @@ import { fileURLToPath, URL } from "node:url";
 
 
 export default defineConfig({
+  // Public base path for the app. Allows root ("/") and scoped builds (e.g., "/b/BUILD_ID/").
+  base: process.env.VITE_BASE || '/',
   plugins: [react()],
   resolve: {
     alias: {

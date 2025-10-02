@@ -3,7 +3,7 @@
 
 /** @type {ServiceWorkerGlobalScope} */ // eslint-disable-line
 const sw = /** @type {any} */ (self);
-const VERSION_URL = "/version.json"; // written at build time
+const VERSION_URL = "version.json"; // relative to scope; written at build time
 let BUILD_ID = undefined;
 function cacheName() {
   return `muxpoc-shell-${BUILD_ID ?? 'dev'}`;
@@ -15,7 +15,7 @@ function withBuildParam(u) {
     return url.pathname + (url.search ? url.search : '');
   } catch { return u; }
 }
-const APP_SHELL_BASE = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
+const APP_SHELL_BASE = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 function appShell() {
   return APP_SHELL_BASE.map(withBuildParam);
 }
@@ -62,7 +62,7 @@ sw.addEventListener("fetch", (e) => {
   if (isApi || isWrite || isStream) return; // let network handle
 
   // Always bypass cache for version.json so updates are detected promptly
-  if (url.pathname === "/version.json") {
+  if (url.pathname.endsWith("/version.json")) {
     e.respondWith((async () => {
       try {
         return await fetch(e.request, { cache: "no-store" });
@@ -96,7 +96,7 @@ sw.addEventListener("fetch", (e) => {
   }
 
   // Cache-first for hashed static assets (Vite emits content-hashed URLs under /assets/)
-  if (url.pathname.startsWith("/assets/")) {
+  if (url.pathname.includes("/assets/")) {
     e.respondWith((async () => {
       const cached = await caches.match(e.request);
       if (cached) return cached;

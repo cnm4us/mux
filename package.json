@@ -7,15 +7,73 @@
     "packages/*"
   ],
   "scripts": {
+    "help": "node tools/help.js",
     "typecheck": "npm -w api run typecheck && npm -w web run typecheck",
     "build": "npm -w api run build && npm -w web run build",
     "deploy:web": "npm -w web run build && sudo rsync -a --delete web/dist/ /var/www/mux-spa/",
+    "web:build": "bash tools/web-build.sh",
+    "web:deploy": "FORCE_ROOT=1 sudo --preserve-env=FORCE_ROOT bash tools/web-deploy.sh",
+    "web:build:scoped": "BUILD_ID=${BUILD_ID:-$(date +%Y%m%d%H%M%S)-$(git rev-parse --short HEAD)} bash tools/web-build.sh",
+    "web:deploy:scoped": "sudo --preserve-env=BUILD_ID bash tools/web-deploy.sh",
+    "web:scoped": "bash tools/build-scoped.sh",
+    "web:nginx:sideby": "bash tools/nginx-sideby.sh",
+    "web:nginx:sideby:clean": "bash tools/nginx-sideby-clean.sh",
     "dev:all": "node tools/dev-all.js",
     "tree": "tsx tools/project-tree.ts --root=. --out=build/project-tree",
     "tree:md": "tsx tools/project-tree.ts --root=. --md",
     "tree:web": "tsx tools/project-tree.ts --root=. --out=build/project-tree --include=src/**,app/** --exclude=**/*.test.*,**/*.map",
     "tree:since": "tsx tools/project-tree.ts --root=. --out=build/project-tree --since=origin/main",
     "tree:work": "tsx tools/project-tree.ts --root=. --out=build/project-tree --graph --todos=8"
+  },
+  "scriptsMeta": {
+    "help": {
+      "desc": "List scripts or help for one",
+      "detail": "Usage: npm run help [script]\n- Without args: lists all scripts with descriptions\n- With a script: prints details and the underlying command"
+    },
+    "typecheck": {
+      "desc": "Typecheck API and Web",
+      "detail": "Runs TypeScript checks in both workspaces without emitting output."
+    },
+    "build": {
+      "desc": "Build API and Web",
+      "detail": "Compiles API (tsc) and builds Web (Vite)."
+    },
+    "deploy:web": {
+      "desc": "Build+deploy Web to root",
+      "detail": "Builds the Web app and rsyncs to /var/www/mux-spa/."
+    },
+    "web:build": {
+      "desc": "Build Web (root or scoped)",
+      "detail": "Root: npm run web:build\nScoped: BUILD_ID=YYYYmmddHHMMSS-<sha> npm run web:build\nRecords BUILD_ID in tools/LAST_BUILD_ID when scoped."
+    },
+    "web:deploy": {
+      "desc": "Deploy Web to root",
+      "detail": "Rsyncs web/dist to /var/www/mux-spa/ (forces root deploy)."
+    },
+    "web:build:scoped": {
+      "desc": "Build Web with base=/b/BUILD_ID/",
+      "detail": "Computes or uses BUILD_ID and builds with BASE_URL=/b/BUILD_ID/."
+    },
+    "web:deploy:scoped": {
+      "desc": "Deploy Web to /var/www/mux-spa-builds/BUILD_ID/",
+      "detail": "Uses BUILD_ID from env; falls back to tools/LAST_BUILD_ID if not set."
+    },
+    "web:scoped": {
+      "desc": "Build+deploy scoped and write confs",
+      "detail": "Builds with base=/b/BUILD_ID/, rsyncs to /var/www/mux-spa-builds/BUILD_ID/, writes Nginx confs."
+    },
+    "web:nginx:sideby": {
+      "desc": "Add side-by include + reload",
+      "detail": "Adds include /etc/nginx/mux/builds/BUILD_ID.sideby.conf; prints full URLs. Uses LAST_BUILD_ID if BUILD_ID is not set."
+    },
+    "web:nginx:sideby:clean": {
+      "desc": "Remove all side-bys (conf+folders)",
+      "detail": "Backs up build.current.conf, clears side-by region, deletes all /etc/nginx/mux/builds/*.conf and *.sideby.conf, and prunes /var/www/mux-spa-builds/*."
+    },
+    "dev:all": {
+      "desc": "Run API+Web dev servers",
+      "detail": "API: npm -w api run dev\nWeb: npm -w web run dev (HMR @5173; proxies /api)."
+    }
   },
   "devDependencies": {
     "ignore": "^7.0.5",

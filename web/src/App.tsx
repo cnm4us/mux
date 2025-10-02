@@ -85,8 +85,9 @@ function AppShell() {
 }
 
 export default function App() {
+    const base = (import.meta as any).env.BASE_URL || "/";
     return (
-        <BrowserRouter>
+        <BrowserRouter basename={base}>
             <AppShell />
         </BrowserRouter>
     );

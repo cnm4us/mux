@@ -20,7 +20,18 @@ function utcStamp(d = new Date()) {
   );
 }
 
-function getBuildId() {
+function envBuildId() {
+  const fromEnv = process.env.BUILD_ID && String(process.env.BUILD_ID).trim();
+  if (fromEnv) return fromEnv;
+  const base = process.env.VITE_BASE && String(process.env.VITE_BASE).trim();
+  if (base) {
+    const m = base.match(/\/b\/([^/]+)\//);
+    if (m && m[1]) return m[1];
+  }
+  return null;
+}
+
+function fallbackBuildId() {
   const ts = utcStamp();
   let sha = '';
   try {
@@ -31,7 +42,7 @@ function getBuildId() {
   return sha ? `${sha}-${ts}` : ts;
 }
 
-const buildId = getBuildId();
+const buildId = envBuildId() || fallbackBuildId();
 const builtAt = new Date().toISOString();
 
 const root = __dirname + '/..';

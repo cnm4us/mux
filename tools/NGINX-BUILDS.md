@@ -23,6 +23,11 @@ This repo contains Nginx snippets to decouple the site config from the current S
 2) Install include once: `cp tools/build.current.conf.sample /etc/nginx/mux/build.current.conf`
 3) Reload Nginx: `sudo nginx -t && sudo nginx -s reload`
 
+Unified scripting (optional):
+
+- Build: `tools/web-build.sh` (root build by default)
+- Deploy: `tools/web-deploy.sh`
+
 Pros: minimal changes. Cons: relies on SW update flow; iOS may delay controller handoff.
 
 ## Switch flow (path‑scoped builds, recommended)
@@ -39,6 +44,18 @@ Install:
 3) Point current include: `ln -sfn /etc/nginx/mux/builds/BUILD_ID.conf /etc/nginx/mux/build.current.conf`
 4) Reload Nginx: `sudo nginx -t && sudo nginx -s reload`
 
+Unified scripting (optional):
+
+- Build: `BUILD_ID=YYYYmmddHHMMSS-<gitsha> tools/web-build.sh`
+  - or run `npm run web:scoped` to compute one for you
+- Deploy: `BUILD_ID=… tools/web-deploy.sh`
+  - or omit BUILD_ID to deploy the last built ID (reads from `tools/LAST_BUILD_ID`)
+
+Side-by-side testing (no root flip):
+
+- Include the generated side-by conf: `include /etc/nginx/mux/builds/BUILD_ID.sideby.conf;` in `/etc/nginx/mux/build.current.conf` and reload Nginx.
+  - Or run: `BUILD_ID=… npm run web:nginx:sideby` (falls back to `tools/LAST_BUILD_ID` if unset)
+
 Verify:
 
 - `/` redirects to `/b/BUILD_ID/`
@@ -53,4 +70,3 @@ Rollback: repoint the symlink to the previous `BUILD_ID.conf` and reload Nginx.
 - Long-cache only for `/assets/` (hashed filenames).
 - For path‑scoped builds, keep all files (icons, manifest) inside each build folder for simplicity.
 - You can A/B by routing a subset of users to a different `/b/ID/` via a separate include and map.
-

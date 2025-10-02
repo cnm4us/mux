@@ -6,7 +6,9 @@ import App from "./App";
 // Register service worker for PWA
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-        navigator.serviceWorker.register("/sw.js", { updateViaCache: 'none' }).catch(() => { });
+        const base = (import.meta as any).env.BASE_URL || "/";
+        const swUrl = base.replace(/\/$/, "") + "/sw.js";
+        navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' }).catch(() => { });
         // Proactively ask SW to check for updates when possible
         navigator.serviceWorker.ready.then(() => {
             if (navigator.serviceWorker.controller) {

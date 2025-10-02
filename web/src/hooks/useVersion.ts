@@ -7,7 +7,9 @@ export function useVersion() {
 
   const fetchVersion = React.useCallback(async () => {
     try {
-      const res = await fetch('/version.json', { cache: 'no-cache' });
+      const base = (import.meta as any).env.BASE_URL || '/';
+      const url = base.replace(/\/$/, '') + '/version.json';
+      const res = await fetch(url, { cache: 'no-cache' });
       if (!res.ok) return;
       const j = await res.json();
       const id = String(j?.buildId ?? '');
@@ -29,4 +31,3 @@ export function useVersion() {
 
   return { buildId, builtAt, hasUpdate, refresh: () => window.location.reload(), refetch: fetchVersion };
 }
-
