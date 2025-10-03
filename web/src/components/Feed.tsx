@@ -408,7 +408,7 @@ export default function Feed() {
                 style={{
                     position: "sticky",
                     top: 0,
-                    height: "calc(var(--vvh) + env(safe-area-inset-top))",
+                    height: "var(--vvh)",
                     display: "flex",
                     alignItems: "flex-start",
                     justifyContent: "center",
@@ -432,10 +432,11 @@ export default function Feed() {
                         poster={active === 0 ? undefined : (hasStarted ? (posters[items[active]?.id || ""] || undefined) : undefined)}
                         /* Disable pointer to avoid fighting built-in center play button */
                         style={{
-                            width: "100%",
-                            // keep intrinsic video size, avoid stretching poster
-                            aspectRatio: "9 / 16",
-                            maxHeight: "100dvh",
+                            // Fill by height, preserve aspect; avoid overflow right by allowing narrower width
+                            height: "100%",
+                            width: "auto",
+                            maxHeight: "var(--vvh)",
+                            maxWidth: "100%",
                             pointerEvents: "none",
                             backgroundColor: "#000"
                         }}

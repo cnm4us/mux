@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<!-- iOS PWA: allow content under status bar when launched from Home Screen -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
 <!-- Build ID is injected via .env.local as VITE_BUILD_ID by scripts/write-version.cjs -->
 <link rel="manifest" href="manifest.webmanifest?v=%VITE_BUILD_ID%" />
 <link rel="preconnect" href="https://image.mux.com">
@@ -12,17 +16,32 @@
 </head>
 <body>
 <div id="root"></div>
-<script type="module" src="/src/main.tsx"></script>
 <script>
   (function () {
-    function setVVH() {
-      var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    function computeVVH() {
+      var vv = (window.visualViewport && window.visualViewport.height) || 0;
+      var ih = window.innerHeight || 0;
+      var ch = (document.documentElement && document.documentElement.clientHeight) || 0;
+      var vals = [];
+      if (vv) vals.push(vv);
+      if (ih) vals.push(ih);
+      if (ch) vals.push(ch);
+      var h = vals.length ? Math.min.apply(null, vals) : ih || ch;
       document.documentElement.style.setProperty('--vvh', h + 'px');
+    }
+    function setVVH() {
+      computeVVH();
+      setTimeout(computeVVH, 50);
+      setTimeout(computeVVH, 250);
+      if (window.requestAnimationFrame) requestAnimationFrame(computeVVH);
     }
     setVVH();
     if (window.visualViewport) window.visualViewport.addEventListener('resize', setVVH);
     window.addEventListener('resize', setVVH);
+    window.addEventListener('orientationchange', setVVH);
+    window.addEventListener('pageshow', setVVH);
   })();
   </script>
+<script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
