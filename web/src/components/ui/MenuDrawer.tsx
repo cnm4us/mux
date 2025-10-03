@@ -32,7 +32,7 @@ export default function MenuDrawer() {
           {user ? (
             <Link to="/logout" className="drawer-link" onClick={close}>Logout</Link>
           ) : (
-            <Link to="/login" className="drawer-link" onClick={close}>Login</Link>
+            <Link to="/login" className="drawer-cta" onClick={close}>Login</Link>
           )}
 
           {/* Additional common links */}
@@ -46,4 +46,3 @@ export default function MenuDrawer() {
     </>
   );
 }
-

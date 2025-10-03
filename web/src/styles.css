@@ -51,7 +51,7 @@ body {
     position: fixed;
     top: 12px;
     left: 12px;
-    z-index: 60;
+    z-index: 80; /* above drawer (61) so the X stays visible/clickable */
     width: 36px;
     height: 32px;
     display: grid;
@@ -65,9 +65,24 @@ body {
 .hamburger-btn .bar {
     display: block;
     height: 2px;
-    background: rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.6); /* 60% opaque */
     border-radius: 1px;
+    transition: transform 160ms ease, opacity 120ms ease;
 }
+
+/* Transform into an X when open */
+.hamburger-btn.is-open {
+    position: fixed;
+}
+.hamburger-btn.is-open .bar {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    top: 50%;
+}
+.hamburger-btn.is-open .bar:nth-child(1) { transform: translateY(-50%) rotate(45deg); }
+.hamburger-btn.is-open .bar:nth-child(2) { opacity: 0; }
+.hamburger-btn.is-open .bar:nth-child(3) { transform: translateY(-50%) rotate(-45deg); }
 
 .drawer-backdrop {
     position: fixed;
@@ -97,7 +112,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    padding: 16px 12px;
+    /* extra top padding to clear the close (X) button */
+    padding: 36px 12px 16px 12px;
 }
 .drawer-link {
     text-decoration: none;
@@ -106,6 +122,21 @@ body {
     border-radius: 8px;
 }
 .drawer-link:hover { background: rgba(255,255,255,0.06); }
+
+/* Prominent Login CTA (deep red) */
+.drawer-cta {
+    display: block;
+    text-align: center;
+    background: #b91c1c; /* deep red */
+    color: #fff;
+    font-weight: 600;
+    padding: 10px 12px;
+    border-radius: 10px;
+    width: 80%;
+    margin: 16px auto;
+    text-decoration: none;
+}
+.drawer-cta:hover { background: #991b1b; }
 
 .card {
     height: 100vh;
