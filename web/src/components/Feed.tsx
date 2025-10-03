@@ -408,7 +408,7 @@ export default function Feed() {
                 style={{
                     position: "sticky",
                     top: 0,
-                    height: "100dvh",
+                    height: "calc(var(--vvh) + env(safe-area-inset-top))",
                     display: "flex",
                     alignItems: "flex-start",
                     justifyContent: "center",

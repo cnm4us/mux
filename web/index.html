@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <!-- Build ID is injected via .env.local as VITE_BUILD_ID by scripts/write-version.cjs -->
 <link rel="manifest" href="manifest.webmanifest?v=%VITE_BUILD_ID%" />
 <link rel="preconnect" href="https://image.mux.com">
@@ -13,5 +13,16 @@
 <body>
 <div id="root"></div>
 <script type="module" src="/src/main.tsx"></script>
+<script>
+  (function () {
+    function setVVH() {
+      var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+      document.documentElement.style.setProperty('--vvh', h + 'px');
+    }
+    setVVH();
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', setVVH);
+    window.addEventListener('resize', setVVH);
+  })();
+  </script>
 </body>
 </html>
