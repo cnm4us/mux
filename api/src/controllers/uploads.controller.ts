@@ -5,11 +5,12 @@ import { mux } from "../services/mux/client.js";  // see note below
 
 const videosRepo = new VideosMySqlRepo(); // <- simple singleton
 
-export async function createUpload(req: Request, res: Response) {
+export async function createUpload(req: Request & { user?: { id: number } }, res: Response) {
   try {
     const title: string | null = req.body?.title ?? null;
 
-    const video = await videosRepo.createProvisional({ title });
+    const userId = req.user?.id;
+    const video = await videosRepo.createProvisional({ title, userId });
 
     const resp = await mux.video.uploads.create({
       cors_origin: "*",

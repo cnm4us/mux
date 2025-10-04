@@ -12,7 +12,7 @@ const items = [
 
 export default function LeftRail() {
     const { pathname } = useLocation();
-    const { roles } = useAuth();
+    const { roles, user } = useAuth();
     return (
         <aside className="left-rail">
             <nav className="left-rail-nav">
@@ -21,6 +21,11 @@ export default function LeftRail() {
                         {i.label}
                     </Link>
                 ))}
+                {user && (
+                    <Link className={`left-link ${pathname === '/my-uploads' ? 'active' : ''}`} to="/my-uploads">
+                        My Uploads
+                    </Link>
+                )}
                 {roles.includes('admin') && (
                     <Link className={`left-link ${pathname === '/admin/users' ? 'active' : ''}`} to="/admin/users">
                         Admin · Users

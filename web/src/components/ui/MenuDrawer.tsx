@@ -41,6 +41,9 @@ export default function MenuDrawer() {
           <Link to="/inbox" className="drawer-link" onClick={close}>Inbox</Link>
           <Link to="/profile" className="drawer-link" onClick={close}>Profile</Link>
           <Link to="/settings" className="drawer-link" onClick={close}>Settings</Link>
+          {user && (
+            <Link to="/my-uploads" className="drawer-link" onClick={close}>My Uploads</Link>
+          )}
           {roles.includes('admin') && (
             <Link to="/admin/users" className="drawer-link" onClick={close}>Admin · Users</Link>
           )}

@@ -3,6 +3,9 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "db:exec": "bash scripts/db-exec.sh",
+    "db:show": "bash scripts/db-exec.sh 'SHOW TABLES;'",
+    "db:describe:users": "bash scripts/db-exec.sh 'DESCRIBE users;'",
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",

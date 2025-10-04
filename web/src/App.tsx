@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Routes, Route, useParams, useLocation, Navigate } from "react-router-dom";
 import MuxPlayer from "@mux/mux-player-react";
 import Player from "@/components/Player";
@@ -20,6 +20,7 @@ import RegisterPage from "@/pages/Register";
 import LogoutPage from "@/pages/Logout";
 import AdminUsersPage from "@/pages/admin/Users";
 import { RequireRole } from "@/context/AuthContext";
+import MyUploadsPage from "@/pages/MyUploads";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -31,13 +32,21 @@ function SinglePlayerPage({ pbOverride }: { pbOverride?: string }) {
     const { pb: pbFromRoute } = useParams();
     const pb = pbOverride || pbFromRoute;
     const [src, setSrc] = useState<string | null>(null);
+    const playerRef = useRef<React.ComponentRef<typeof MuxPlayer> | null>(null);
+    const [ready, setReady] = useState(false);
+    const [playing, setPlaying] = useState(false);
 
     useEffect(() => {
         if (!pb) return;
         (async () => {
-            const r = await fetch(`${API}/playback/${pb}/play`);
-            const j = await r.json();
-            setSrc(j?.playback?.url ?? null);
+            try {
+                const r = await fetch(`${API}/v1/playback/${pb}/play`);
+                if (!r.ok) throw new Error(String(r.status));
+                const j = await r.json();
+                setSrc(j?.playback?.url ?? null);
+            } catch (e) {
+                setSrc(null);
+            }
         })();
     }, [pb]);
 
@@ -47,15 +56,56 @@ function SinglePlayerPage({ pbOverride }: { pbOverride?: string }) {
     return (
         <div style={{ maxWidth: 420, margin: "40px auto" }}>
             <h1>Mux POC</h1>
-            <small style={{ wordBreak: "break-all" }}>{src}</small>
-            <Player
-                src={src}
-                streamType="on-demand"
-                autoPlay
-                muted
-                playsInline
-                style={{ width: "100%", aspectRatio: "9 / 16", display: "block", marginTop: 12 }}
-            />
+            <div style={{ position: 'relative', marginTop: 12 }}>
+                <Player
+                    ref={playerRef}
+                    src={src}
+                    streamType="on-demand"
+                    autoPlay={false}
+                    muted={false}
+                    playsInline
+                    nohotkeys={false}
+                    style={{ width: "100%", aspectRatio: "9 / 16", display: "block" }}
+                    onLoadedMetadata={() => setReady(true)}
+                    onPlaying={() => setPlaying(true)}
+                    onPause={() => setPlaying(false)}
+                />
+                {/* Centered play/pause overlay */}
+                {ready && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const el: any = playerRef.current;
+                        if (!el) return;
+                        if (playing) {
+                          await el.pause?.();
+                        } else {
+                          el.muted = false;
+                          await el.play?.();
+                        }
+                      } catch {}
+                    }}
+                    aria-pressed={playing}
+                    aria-label={playing ? 'Pause' : 'Play with sound'}
+                    style={{
+                      position: 'absolute', inset: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: 'transparent', cursor: 'pointer', border: 'none',
+                      color: '#fff', fontSize: 24, zIndex: 2,
+                    }}
+                  >
+                    <span style={{
+                      background: 'rgba(0,0,0,0.35)',
+                      padding: '10px 16px', borderRadius: 8,
+                      backdropFilter: 'blur(2px)'
+                    }}>
+                      {playing ? 'Pause' : 'Play'}
+                    </span>
+                  </button>
+                )}
+            </div>
+            {/* Controls moved into overlay; no extra buttons below */}
         </div>
     );
 }
@@ -80,6 +130,7 @@ function AppShell() {
                 <Routes>
                     <Route path="/" element={<Feed />} />
                     <Route path="/upload" element={<Uploader />} />
+                    <Route path="/my-uploads" element={<MyUploadsPage />} />
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/register" element={<RegisterPage />} />
                     <Route path="/logout" element={<LogoutPage />} />

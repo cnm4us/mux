@@ -33,14 +33,17 @@ function rowToVideo(r: VideoRow): Video {
 }
 
 export class VideosMySqlRepo {
-  async createProvisional(input: { title?: string | null; now?: number }): Promise<Video> {
+  async createProvisional(input: { title?: string | null; now?: number; userId?: number }): Promise<Video> {
     const ts = input.now ?? Date.now();
     const id = `v_${ts}`;
 
-    await pool.execute<ResultSetHeader>(
-      `INSERT INTO videos (id, title, status) VALUES (:id, :title, 'pending')`,
-      { id, title: input.title ?? null }
-    );
+    // Associate uploader if provided (requires videos.user_id in schema)
+    const withUser = typeof input.userId === 'number' && Number.isFinite(input.userId);
+    const sql = withUser
+      ? `INSERT INTO videos (id, title, status, user_id) VALUES (:id, :title, 'pending', :userId)`
+      : `INSERT INTO videos (id, title, status) VALUES (:id, :title, 'pending')`;
+    const params: any = { id, title: input.title ?? null, ...(withUser ? { userId: input.userId } : {}) };
+    await pool.execute<ResultSetHeader>(sql, params);
 
     const [rows] = await pool.execute<VideoRow[]>(
       `SELECT * FROM videos WHERE id = :id LIMIT 1`,
@@ -156,6 +159,29 @@ async markProcessing(params: { uploadId: string; assetId?: string | null }): Pro
       { limit }
     );
     return rows.map(rowToVideo);
+  }
+
+  async listByUser(userId: number, limit = 50, offset = 0): Promise<Video[]> {
+    const [rows] = await pool.execute<VideoRow[]>(
+      `
+      SELECT * FROM videos
+       WHERE user_id = :userId
+       ORDER BY created_at DESC, id DESC
+       LIMIT :limit OFFSET :offset
+      `,
+      { userId, limit, offset }
+    );
+    return rows.map(rowToVideo);
+  }
+
+  async softDeleteByOwner(userId: number, videoId: string): Promise<boolean> {
+    const [r] = await pool.execute<ResultSetHeader>(
+      `UPDATE videos
+         SET status = 'deleted', updated_at = NOW(3)
+       WHERE id = :id AND user_id = :uid AND status <> 'deleted'`,
+      { id: videoId, uid: userId }
+    );
+    return (r as ResultSetHeader).affectedRows > 0;
   }
 }
 
