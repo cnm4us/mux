@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 
 const items = [
     { to: "/", label: "Feed" },
@@ -11,6 +12,7 @@ const items = [
 
 export default function LeftRail() {
     const { pathname } = useLocation();
+    const { roles } = useAuth();
     return (
         <aside className="left-rail">
             <nav className="left-rail-nav">
@@ -19,6 +21,11 @@ export default function LeftRail() {
                         {i.label}
                     </Link>
                 ))}
+                {roles.includes('admin') && (
+                    <Link className={`left-link ${pathname === '/admin/users' ? 'active' : ''}`} to="/admin/users">
+                        Admin · Users
+                    </Link>
+                )}
             </nav>
         </aside>
     );

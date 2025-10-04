@@ -6,6 +6,7 @@ import assets from "./assets.js";
 import muxWebhook from "./webhooks/mux.js";
 import debug from "./debug.js";
 import auth from "./auth.js";
+import admin from "./admin.js";
 
 const r = Router();
 
@@ -15,6 +16,7 @@ r.use(videos);
 r.use(playback);
 r.use(assets);
 r.use(auth);
+r.use(admin);
 r.use("/", debug); 
 
 export default r;

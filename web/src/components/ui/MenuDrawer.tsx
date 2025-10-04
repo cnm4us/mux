@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 
 export default function MenuDrawer() {
   const [open, setOpen] = React.useState(false);
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const nav = useNavigate();
 
   const close = () => setOpen(false);
@@ -41,6 +41,9 @@ export default function MenuDrawer() {
           <Link to="/inbox" className="drawer-link" onClick={close}>Inbox</Link>
           <Link to="/profile" className="drawer-link" onClick={close}>Profile</Link>
           <Link to="/settings" className="drawer-link" onClick={close}>Settings</Link>
+          {roles.includes('admin') && (
+            <Link to="/admin/users" className="drawer-link" onClick={close}>Admin · Users</Link>
+          )}
         </nav>
       </aside>
     </>
