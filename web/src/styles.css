@@ -223,6 +223,15 @@ mux-player {
     --media-object-position: top center;
 }
 
+/* Immersive landscape mode (toggled via html.imm-ls) */
+html.imm-ls, body.imm-ls { overflow: hidden; }
+html.imm-ls .bottom-bar { display: none !important; }
+html.imm-ls .left-rail { display: none !important; }
+html.imm-ls mux-player {
+    /* Ensure centered fit for landscape viewing */
+    --media-object-position: center;
+}
+
 /* Minimal progress indicator (non-interactive) */
 /* Media Chrome progress theme (scrubbable) */
 media-progress-range,

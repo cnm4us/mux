@@ -7,6 +7,7 @@ import Player from "@/components/Player";
 import { fetchFeed, getPlayUrl, type FeedItem, playbackIdFromUrl, getSignedPosterUrl } from "../hooks/useFeed";
 import MuxPlayerCard from "./MuxPlayerCard";
 import { useSoundPref } from "@/hooks/useSoundPref";
+import { useOrientation } from "@/hooks/useOrientation";
 
 let __PLAYER_SEQ = 0;
 
@@ -61,6 +62,84 @@ export default function Feed() {
     const playerRef = React.useRef<React.ComponentRef<typeof MuxPlayer> | null>(null);
 
     const { soundOn, setSoundOn } = useSoundPref();
+    const { isPortrait } = useOrientation();
+    const immersive = !isPortrait; // immersive CSS mode in landscape
+    const [fsPrompt, setFsPrompt] = React.useState(false);
+    const [isFs, setIsFs] = React.useState<boolean>(false);
+
+    function getMediaEl() {
+        try {
+            const el: any = playerRef.current;
+            return (el as any)?.media || (el as any)?.shadowRoot?.querySelector?.('video') || null;
+        } catch { return null; }
+    }
+
+    // Toggle immersive CSS class on <html>
+    React.useEffect(() => {
+        const root = document.documentElement;
+        if (immersive) root.classList.add('imm-ls'); else root.classList.remove('imm-ls');
+        return () => { root.classList.remove('imm-ls'); };
+    }, [immersive]);
+
+    // Best-effort: enter/exit fullscreen when rotating; show prompt if blocked
+    React.useEffect(() => {
+        const container = playerContainerRef.current as any;
+        const d: any = document;
+
+        const onFsChange = () => {
+            const inFs = !!d.fullscreenElement;
+            setIsFs(inFs);
+            if (inFs) setFsPrompt(false);
+        };
+        document.addEventListener('fullscreenchange', onFsChange);
+
+        // iOS native video fullscreen events
+        const media = getMediaEl();
+        const onWkBegin = () => { setIsFs(true); setFsPrompt(false); };
+        const onWkEnd = () => { setIsFs(false); };
+        try {
+            media?.addEventListener?.('webkitbeginfullscreen', onWkBegin as any);
+            media?.addEventListener?.('webkitendfullscreen', onWkEnd as any);
+        } catch {}
+
+        (async () => {
+            try {
+                if (!immersive) {
+                    // Leaving landscape: exit fullscreen if active
+                    if (d.fullscreenElement && d.exitFullscreen) {
+                        try { await d.exitFullscreen(); } catch {}
+                    }
+                    try { (getMediaEl() as any)?.webkitExitFullscreen?.(); } catch {}
+                    setFsPrompt(false);
+                    return;
+                }
+                // In landscape. Only attempt after user gesture so browsers allow audio/fullscreen
+                if (!hasUserGesture) {
+                    setFsPrompt(false);
+                    return;
+                }
+                if (container && container.requestFullscreen) {
+                    try {
+                        await container.requestFullscreen();
+                        setFsPrompt(false);
+                    } catch {
+                        // Blocked: show toggle icon
+                        setFsPrompt(true);
+                    }
+                } else {
+                    setFsPrompt(true);
+                }
+            } catch { /* ignore */ }
+        })();
+
+        return () => {
+            document.removeEventListener('fullscreenchange', onFsChange);
+            try {
+                media?.removeEventListener?.('webkitbeginfullscreen', onWkBegin as any);
+                media?.removeEventListener?.('webkitendfullscreen', onWkEnd as any);
+            } catch {}
+        };
+    }, [immersive, hasUserGesture]);
 
     // Initialize session-based resume: if this tab session has already started
     React.useEffect(() => {
@@ -405,14 +484,25 @@ export default function Feed() {
         <div ref={containerRef} className="feed">
             {/* Sticky player */}
             <div
-                style={{
-                    position: "sticky",
+                style={immersive ? {
+                    position: 'fixed',
+                    inset: 0,
+                    height: '100dvh',
+                    width: '100vw',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: '#000',
+                    pointerEvents: 'auto',
+                    zIndex: 1000,
+                } : {
+                    position: 'sticky',
                     top: 0,
-                    height: "var(--vvh)",
-                    display: "flex",
-                    alignItems: "flex-start",
-                    justifyContent: "center",
-                    pointerEvents: "auto",
+                    height: 'var(--vvh)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'center',
+                    pointerEvents: 'auto',
                     zIndex: 1,
                 }}
                 ref={playerContainerRef}
@@ -431,19 +521,72 @@ export default function Feed() {
                         nohotkeys
                         poster={active === 0 ? undefined : (hasStarted ? (posters[items[active]?.id || ""] || undefined) : undefined)}
                         /* Disable pointer to avoid fighting built-in center play button */
-                        style={{
+                        style={immersive ? {
+                            height: '100%',
+                            width: '100%',
+                            maxHeight: 'none',
+                            maxWidth: 'none',
+                            pointerEvents: 'none',
+                            backgroundColor: '#000'
+                        } : {
                             // Fill by height, preserve aspect; avoid overflow right by allowing narrower width
-                            height: "100%",
-                            width: "auto",
-                            maxHeight: "var(--vvh)",
-                            maxWidth: "100%",
-                            pointerEvents: "none",
-                            backgroundColor: "#000"
+                            height: '100%',
+                            width: 'auto',
+                            maxHeight: 'var(--vvh)',
+                            maxWidth: '100%',
+                            pointerEvents: 'none',
+                            backgroundColor: '#000'
                         }}
                     />
 
                     {/* (Progress moved outside controller to sit above overlay) */}
                 </media-controller>
+
+                {/* Fullscreen toggle overlay (shown in landscape when not in fullscreen) */}
+                {immersive && !isFs && (
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            try {
+                                const container = playerContainerRef.current as any;
+                                if (container?.requestFullscreen) {
+                                    await container.requestFullscreen();
+                                    setFsPrompt(false);
+                                    return;
+                                }
+                            } catch {}
+                            // iOS fallback: try entering the native video fullscreen if exposed
+                            try {
+                                const media: any = getMediaEl();
+                                if (media && typeof media.webkitEnterFullscreen === 'function') {
+                                    media.webkitEnterFullscreen();
+                                    setFsPrompt(false);
+                                }
+                            } catch {}
+                        }}
+                        style={{
+                            position: 'absolute', inset: 0,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'transparent', border: 'none', cursor: 'pointer',
+                            zIndex: 1100, color: '#fff'
+                        }}
+                        aria-label="Enter fullscreen"
+                        >
+                        <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 64, height: 64,
+                            background: 'rgba(0,0,0,0.45)', borderRadius: 999,
+                            backdropFilter: 'blur(2px)'
+                        }}>
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M7 3H3v4"/>
+                                <path d="M17 3h4v4"/>
+                                <path d="M3 17v4h4"/>
+                                <path d="M21 17v4h-4"/>
+                            </svg>
+                        </span>
+                    </button>
+                )}
 
                 {/* Full-screen invisible hit area over the player (click + keyboard) */}
                 <div
@@ -460,6 +603,19 @@ export default function Feed() {
                     onClick={async () => {
                         const el = playerRef.current as any;
                         if (!el) return;
+                        // While in landscape, piggyback this user gesture to enter fullscreen if not already
+                        if (immersive && !isFs) {
+                            const container = playerContainerRef.current as any;
+                            try {
+                                if (container?.requestFullscreen) {
+                                    await container.requestFullscreen();
+                                    setFsPrompt(false);
+                                } else {
+                                    const media: any = getMediaEl();
+                                    if (media?.webkitEnterFullscreen) media.webkitEnterFullscreen();
+                                }
+                            } catch { /* ignore */ }
+                        }
                         // First ever tap: enable sound and start playback with audio
                         if (!hasUserGesture) {
                             setHasUserGesture(true);
